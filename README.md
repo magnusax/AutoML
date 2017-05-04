@@ -20,4 +20,4 @@ It will be written in python3.4+. Libraries which will be heavily relied upon ar
 ### Intepretation
 * LIME
 
-Wrapper modules will be added with time. 
+Wrapper modules will be added with time. Albeit most machine learning tasks fit on a single laptop, I will consider writing some modules in Spark (perhaps best suited for ETL jobs) or DASK/BLAZE. 
