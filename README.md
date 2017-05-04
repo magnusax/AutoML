@@ -13,7 +13,7 @@ It will be written in python3.4+. Libraries which will be heavily relied upon ar
 
 ### Learning and evaluation
 * sci-kit learn
-* tensorflor/keras
+* tensorflow/keras
 * xgboost
 * More to follow...
 
