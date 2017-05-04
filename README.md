@@ -10,6 +10,7 @@ It will be written in python3.4+. Libraries which will be heavily relied upon ar
 
 ### Visualization
 * Seaborn
+* Hypertools
 
 ### Learning and evaluation
 * sci-kit learn
