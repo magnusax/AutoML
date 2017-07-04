@@ -7,6 +7,7 @@ from importlib import reload
 import utils; reload(utils)
 import class_handler_v2 as algorithmHandler; reload(algorithmHandler)
 
+from sklearn.metrics import accuracy_score, log_loss
 
 # Right now, only classification is supported
 def main():
@@ -37,6 +38,17 @@ def main():
     print("Test scores:")
     test_scores = clfs.classifier_performance(clfs.predict_classifiers(X_test), y_test, metric='accuracy')
 
+    # Alternatively: optimize each classifier using a cross-validation scheme
+    print("Cross validation with randomly drawn parameter realizations:")
+    clfs.verbose = 0
+    optims = clfs.optimize_classifiers(X_train, y_train, n_iter=4, n_jobs=-1)
+    for name, optimized_clf in optims: # Classifiers are already fitted (re-training redundant)
+        print(name, 
+              'train score:', accuracy_score(optimized_clf.predict(X_train), y_train), 
+              'test score:',  accuracy_score(optimized_clf.predict(X_test), y_test)
+        )
+        print()
+    
     return
 
 if __name__ == '__main__':
