@@ -61,6 +61,10 @@ class Classifiers(object):
         from nearest_neighbors import MetaKNearestNeighborClassifierAlgorithm as knn
         clfs.append((knn.name_, knn)) 
         
+        # LogisticRegression
+        from logistic_regression import MetaLogisticRegressionClassifierAlgorithm as lr
+        clfs.append((lr.name_, lr))
+        
         return clfs
 
     def fit_classifiers(self, X, y, n_jobs=1):
