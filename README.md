@@ -1,6 +1,6 @@
 # ml-meta-wrapper
 The project aims to develop a customized ML framework on top of existing libraries. Currently,  
-the project is still in its infancy, and only the bare minimum of functionality is present.
+the project is still in its infancy, and only the bare minimum of functionality is present.  
 No original features have thus been added.
 
 It is written for python => 3.4.x. 
