@@ -54,16 +54,16 @@ class Classifiers(object):
         clfs = list()
         
         # AdaBoost
-        from adaboost import MetaAdaBoostClassifierAlgorithm as adaboost
-        clfs.append((adaboost.name_, adaboost))
+        from adaboost import MetaAdaBoostClassifierAlgorithm
+        ada = MetaAdaBoostClassifierAlgorithm(); clfs.append((ada.name_, ada))
         
         # KNearestNeighbors
-        from nearest_neighbors import MetaKNearestNeighborClassifierAlgorithm as knn
-        clfs.append((knn.name_, knn)) 
+        from nearest_neighbors import MetaKNearestNeighborClassifierAlgorithm 
+        knn = MetaKNearestNeighborClassifierAlgorithm(); clfs.append((knn.name_, knn)) 
         
         # LogisticRegression
-        from logistic_regression import MetaLogisticRegressionClassifierAlgorithm as lr
-        clfs.append((lr.name_, lr))
+        from logistic_regression import MetaLogisticRegressionClassifierAlgorithm 
+        lr = MetaLogisticRegressionClassifierAlgorithm(); clfs.append((lr.name_, lr))
         
         return clfs
 
@@ -71,16 +71,16 @@ class Classifiers(object):
         import time
         for name, clf in self.clf:
             try:
-                clf.set_params(**{'n_jobs': n_jobs})
+                clf.estimator.set_params(**{'n_jobs': n_jobs})
             except: pass
             st = time.time()
-            clf.fit(X, y)
+            clf.estimator.fit(X, y)
             if self.verbose > 0:
                 print("Classifier %s trained (time: %.2f min)" % (name, (time.time()-st)/60.))
         return
     
     def predict_classifiers(self, X):
-        return [(name, clf.predict(X)) for name, clf in self.clf]
+        return [(name, clf.estimator.predict(X)) for name, clf in self.clf]
 
     def classifier_performance(self, preds, y_true, metric='accuracy', **kwargs):
         """
