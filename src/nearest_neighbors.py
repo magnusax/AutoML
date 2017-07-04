@@ -26,7 +26,7 @@ class MetaKNearestNeighborClassifierAlgorithm(object):
         self.trainable = None       
         # Initialize empty dictionary which eventually
         # becomes populated with trainable parameters
-        self.cv_param_dist = {}
+        self.cv_param_dist = self._param_dist()
         # Initialize algorithm and make it available
         self.estimator = self.get_clf()
         
@@ -53,28 +53,23 @@ class MetaKNearestNeighborClassifierAlgorithm(object):
         for param, is_trainable in list_of_tuples:
             if is_trainable: params.append(param)
                 
-        for k, v in self._param_dist_dict().items():
+        for k, v in self._param_dist().items():
             if k in params: 
                 self.cv_param_dist[k] = v        
         return   
         
-    def _param_dist_dict(self):
+    def _param_dist(self):
         """
         Dictionary containing all trainable parameters
        (Consider making it public)        
         """
-        from sklearn.model_selection import ParameterGrid
-        grid = [{ #'n_neighbors': randint(2, 15),
-                  'weights': ['uniform', 'distance'],
-                  ###'algorithm': ['auto', 'ball_tree', 'kd_tree', 'brute']
-                  'leaf_size': [15, 30, 45], # see: http://scikit-learn.org/stable/modules/neighbors.html#neighbors (1.6.4.5. Effect of leaf_size)
-                  'p': [1,2],
-                  'metric': ['minkowski']},
-                { #'n_neighbors': randint(2, 15),
-                  'weights': ['uniform', 'distance'],
-                  'leaf_size': [15, 30, 45],
-                  'metric': ['chebyshev']}]
-        return ParameterGrid(grid)
+        dict = { 'n_neighbors': randint(2, 20),
+                 'weights': ['uniform', 'distance'],
+                 'algorithm': ['auto', 'ball_tree', 'kd_tree', 'brute'],
+                 'leaf_size': [15, 30, 45], # see: http://scikit-learn.org/stable/modules/neighbors.html#neighbors (1.6.4.5. Effect of leaf_size)
+                 'p': [1,2,3],
+                 'metric': ['minkowski']}
+        return dict
         
                            
 if __name__ == '__main__':

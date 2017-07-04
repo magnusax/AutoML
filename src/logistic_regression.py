@@ -30,7 +30,7 @@ class MetaLogisticRegressionClassifierAlgorithm(object):
         self.trainable = None       
         # Initialize empty dictionary which eventually
         # becomes populated with trainable parameters
-        self.cv_param_dist = {}
+        self.cv_param_dist = self._param_dist()
         # Initialize algorithm and make it available
         self.estimator = self.get_clf()
         

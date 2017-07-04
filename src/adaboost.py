@@ -38,7 +38,7 @@ class MetaAdaBoostClassifierAlgorithm(object):
         self.trainable = None       
         # Initialize empty dictionary which eventually
         # becomes populated with trainable parameters
-        self.cv_param_dist = {}
+        self.cv_param_dist = self._param_dist()
         # Initialize algorithm and make it available
         self.estimator = self.get_clf()
         
@@ -68,12 +68,12 @@ class MetaAdaBoostClassifierAlgorithm(object):
         for param, is_trainable in list_of_tuples:
             if is_trainable: params.append(param)
                 
-        for k, v in self._param_dist_dict().items():
+        for k, v in self._param_dist().items():
             if k in params: 
                 self.cv_param_dist[k] = v
         return   
         
-    def _param_dist_dict(self):
+    def _param_dist(self):
         """
         Dictionary containing all trainable parameters
        (Consider making it public)

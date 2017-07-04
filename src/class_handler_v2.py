@@ -53,15 +53,20 @@ class Classifiers(object):
         """
         clfs = list()
         
+        from importlib import reload
+        
         # AdaBoost
-        from adaboost import MetaAdaBoostClassifierAlgorithm
+        import adaboost; reload(adaboost)
+        from adaboost import MetaAdaBoostClassifierAlgorithm 
         ada = MetaAdaBoostClassifierAlgorithm(); clfs.append((ada.name_, ada))
         
         # KNearestNeighbors
+        import nearest_neighbors; reload(nearest_neighbors)
         from nearest_neighbors import MetaKNearestNeighborClassifierAlgorithm 
         knn = MetaKNearestNeighborClassifierAlgorithm(); clfs.append((knn.name_, knn)) 
         
         # LogisticRegression
+        import logistic_regression; reload(logistic_regression)
         from logistic_regression import MetaLogisticRegressionClassifierAlgorithm 
         lr = MetaLogisticRegressionClassifierAlgorithm(); clfs.append((lr.name_, lr))
         
@@ -109,7 +114,32 @@ class Classifiers(object):
             for name, met, loss in scores: print("log_loss: %.4f \t %s: %.4f \t %s"%(loss, metric, met, name))
         return scores
     
-    
+    def optimize_classifiers(self, X, y, n_iter=12, scoring='accuracy', cv=10, n_jobs=1):
+        """
+        This method is a wrapper to cross validation, wherein we optimize each available algorithm
+        """
+        from sklearn.model_selection import RandomizedSearchCV
+        optimized = list()
+        for name, algorithm in self.clf:
+            estimator, param_dist = (algorithm.estimator, algorithm.cv_param_dist)
+            if type(param_dist) == list: param_dist = param_dist[0]
+            if self.verbose>0:
+                print("Grid search for '%s'" % name)
+            try:
+                search = RandomizedSearchCV(estimator, param_distributions=param_dist, 
+                                            n_iter=n_iter, scoring=scoring, 
+                                            cv=cv, n_jobs=n_jobs, verbose=self.verbose, 
+                                            error_score=0, return_train_score=True)
+                search.fit(X, y)
+            except:
+                print(sys.exc_info()[1])
+            print("Best mean score: %.4f (%s)" % (search.best_score_, name))
+            optimized.append((name,search.best_estimator_))
+        # Re-write later: for now just return a list of optimized estimators
+        # Perhaps we should return the grids themselves???
+        return optimized
+
+
 class CheckClassifierCorrelation():
     """
     Check correlation between classifier predictions using e.g. Pearson's formula. Initially, a repository
