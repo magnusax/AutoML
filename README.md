@@ -1,5 +1,7 @@
 # ml-meta-wrapper
-The project aims to develop a customized ML framework on top of existing libraries 
+The project aims to develop a customized ML framework on top of existing libraries. Currently,  
+the project is still in its infancy, and only the bare minimum of functionality is present.
+
 
 It will be written in python3.4+. Libraries which will be heavily relied upon are:
 
