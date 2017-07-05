@@ -6,13 +6,16 @@ import pandas as pd
 from importlib import reload
 import utils; reload(utils)
 import class_handler_v2 as algorithmHandler; reload(algorithmHandler)
+import visualize; reload(visualize)
+from visualize import Visualizer as viz;
 
 from sklearn.metrics import accuracy_score, log_loss
 
 # Right now, only classification is supported
 def main():
     
-    # Generate data to play with
+    # Generate data to play with (this is a very simple classification dataset, and 
+    # thus only used for demonstration purposes only)
     from sklearn.datasets import load_breast_cancer
     x, y = load_breast_cancer(return_X_y=True)
     print("loaded toy data set")
@@ -48,6 +51,13 @@ def main():
               'test score:',  accuracy_score(optimized_clf.predict(X_test), y_test)
         )
         print()
+    
+    # This method expects a list of 2-tuples and can either return a matplotlib.pyplot.figure object, or 
+    # as in this case, save a figure to the current working directory ('fig.png'). The plot will be in the form 
+    # of a horisontal bar plot sorted according to clasifier performance.
+    # See the doc string for further details
+    fig = viz().show_performance([tuple([name, score]) for name, score, _ in train_scores], 
+                                 fig_size=(12,6), file=os.getcwd()+"/fig.png")
     
     return
 
