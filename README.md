@@ -4,11 +4,10 @@ The project aims to develop a customized ML framework written for python version
 have thus been added.
 
 However, some (perhaps) original ideas drawing upon the my background from statistical cosmology to be implemented are:
-
 * Markov Chain Monte Carlo scheme for optimization of (very-) large ensemble models for large data sets where training
   times are relatively long.
-  
 * Model perturbation and greedy adaptation.
+* Randomized ensembling.
 
 
 Libraries which will be heavily relied upon are:
