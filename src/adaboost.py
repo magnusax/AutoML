@@ -34,10 +34,12 @@ class MetaAdaBoostClassifierAlgorithm(BaseClassifier):
         self.random_state = random_state
         
         # Initialize algorithm and make it available
-        self.estimator = self.get_clf()
-        
+        self.estimator = self.get_clf()        
         # Initialize dictionary with trainable parameters
-        self.cv_params = self._set_cv_params()
+        self.cv_params = self._set_cv_params()       
+        # Initialize list which can be populated with params to tune 
+        self.cv_params_to_tune = []
+
         
     def get_clf(self):
         return AdaBoostClassifier(base_estimator = self.base_estimator, 
@@ -52,7 +54,7 @@ class MetaAdaBoostClassifierAlgorithm(BaseClassifier):
                 'does_regression': False, 
                 'predict_probas': hasattr(self.estimator, 'predict_proba')}
         
-    def set_hyparms(self, params, num_params, mode, keys):
+    def sample_hyperparams(self, params, num_params, mode, keys):
         # We let the child class inherit a general method from its super class
         return super().trainable_hyperparams(params, num_params, mode, keys)
          
@@ -65,7 +67,7 @@ class MetaAdaBoostClassifierAlgorithm(BaseClassifier):
         ad = {'n_estimators': [50, 100, 200],
               'learning_rate': [0.1, 0.05, 0.01]}
         
-        if isinstance(self.base_estimator, DecisionTreeClassifier()):
+        if isinstance(self.base_estimator, type(DecisionTreeClassifier())):
             be = {'base_estimator__criterion': ['gini', 'entropy'],
                   'base_estimator__max_depth': randint(3, 8), # Do not let it go too deep
                   'base_estimator__min_samples_leaf': randint(2, 20),
@@ -73,7 +75,7 @@ class MetaAdaBoostClassifierAlgorithm(BaseClassifier):
                   'base_estimator__class_weight': ['balanced', None]}
         
         # Tends to overfit: maybe use weak learners only, or perhaps skip parameter tuning entirely
-        elif isinstance(self.base_estimator, LogisticRegression()): 
+        elif isinstance(self.base_estimator, type(LogisticRegression())): 
             be = {'base_estimator__C': uniform(0, 150),
                   'base_estimator__fit_intercept': [True, False],
                   'base_estimator__penalty': ['l1', 'l2']} 

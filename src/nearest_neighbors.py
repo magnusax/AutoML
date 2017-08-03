@@ -20,10 +20,12 @@ class MetaKNearestNeighborClassifierAlgorithm(BaseClassifier):
         self.metric = metric
         
         # Initialize algorithm and make it available
-        self.estimator = self.get_clf()
-        
+        self.estimator = self.get_clf()       
         # Initialize dictionary with trainable parameters
         self.cv_params = self._set_cv_params()
+        # Initialize list which can be populated with params to tune 
+        self.cv_params_to_tune = []
+
         
     def get_clf(self):
         return KNeighborsClassifier(n_neighbors = self.n_neighbors, 
@@ -55,7 +57,7 @@ class MetaKNearestNeighborClassifierAlgorithm(BaseClassifier):
                 warnings.warn("warning: '%s' not set (%s)" % (param, sys.exc_info()[1]))
         return 
     
-    def set_hyparms(self, params, num_params, mode, keys):
+    def sample_hyperparams(self, params, num_params, mode, keys):
         # We let the child class inherit a general method from its super class
         return super().trainable_hyperparams(params, num_params, mode, keys)
         
@@ -64,7 +66,7 @@ class MetaKNearestNeighborClassifierAlgorithm(BaseClassifier):
         Dictionary containing all trainable parameters
        (Consider making it public)        
         """
-        return { 'n_neighbors': randint(2, 20),
+        return { 'n_neighbors': randint(2, 50),
                  'weights': ['uniform', 'distance'],
                  'algorithm': ['auto', 'ball_tree', 'kd_tree', 'brute'],
                  'leaf_size': [15, 30, 45], # see: http://scikit-learn.org/stable/modules/neighbors.html#neighbors (1.6.4.5. Effect of leaf_size)

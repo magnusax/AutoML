@@ -5,35 +5,32 @@ import seaborn as sns; sns.set()
 from matplotlib import pyplot as plt
 
 
-class Classifiers(object):
+class Classifiers():
     """
     Class that keeps track of which classifiers we have available. 
     Input:
-       method = str: ('random'   : Choose num_clf random classifiers (default),
+       method = str: ('random' : Choose num_sample random classifiers (default),
                        'complete' : Choose all available classifiers,
-                       'chosen'   : Send in a list of classifiers and initialize)  
-       num_clf = int: Choose number of classifiers to sample (defult: 5. Used when method == 'random', else ignored)
+                       'chosen' : Send in a list (iterable will work) of classifier names and initialize)  
+       num_sample = int: Choose number of classifiers to sample (defult: 3. Used when method == 'random', else ignored)
            clf = list (list-like will also work): Send a list of classifiers to initialize (default: []. Used when method == 'chosen')
     Output:
        List of classifiers 
        
     """
-    def __init__(self, method='random', num_sample=5, clf=None, verbose=0):
-        self.verbose = verbose
+    def __init__(self, method='random', num_sample=3, clf=None, verbose=0):
+        self.verbose = verbose        
         if method not in ['random', 'complete', 'chosen']:
-            raise ValueError("'method' should be either \{'random', 'complete', 'chosen'\}.")
-        if method == 'chosen' and (len(clf)<2 or type(clf) == NoneType):
-            raise ValueError("Specify at least two (2) (name, classifier) tuples in 'clf'")    
+            raise ValueError("'method' should be either {'random', 'complete', 'chosen'}.")        
+        if method == 'chosen' and clf is None:
+            suggestions = [name for name, _ in self.__build_classifier_repository()]
+            raise ValueError("Specify name of at least one (1) classifier in list (iterable) 'clf'. \nValid options: %s" % suggestions)        
         self.method = method
         self.num_sample = num_sample        
-        # Depending on method, load clf list and call fit and predict method
         if method == 'chosen':
-            if not type(clf[0]) == tuple:
-                raise ValueError("Input format: ('clf_name' [str], clf [classifier])")
-            self.clf = clf
+            self.clf = [(name, c) for name, c in self.__build_classifier_repository() if name in clf]
         else:
             self.clf = self.__build_classifier_list()      
-        print("Metod: '%s'" % self.method)
         if self.verbose > 0:    
             print("Initialized classifiers:", end="\n")
             for name, _ in self.clf:
@@ -42,9 +39,9 @@ class Classifiers(object):
     def __build_classifier_list(self):
         clfs = self.__build_classifier_repository()
         if self.method == 'random':
-            print("Sampling %i algorithms from complete inventory." % self.num_sample)
+            print("Sampling %i algorithms..." % self.num_sample)
             from numpy import random
-            clfs = random.choice(clfs, self.num_sample, replace=False)
+            clfs = [clfs[i] for i in random.choice(len(clfs), self.num_sample, replace=False)]
         return clfs
         
     def __build_classifier_repository(self):
@@ -58,17 +55,17 @@ class Classifiers(object):
         # AdaBoost
         import adaboost; reload(adaboost)
         from adaboost import MetaAdaBoostClassifierAlgorithm 
-        ada = MetaAdaBoostClassifierAlgorithm(); clfs.append((ada.name_, ada))
+        ada = MetaAdaBoostClassifierAlgorithm(); clfs.append((ada.name, ada))
         
         # KNearestNeighbors
         import nearest_neighbors; reload(nearest_neighbors)
         from nearest_neighbors import MetaKNearestNeighborClassifierAlgorithm 
-        knn = MetaKNearestNeighborClassifierAlgorithm(); clfs.append((knn.name_, knn)) 
+        knn = MetaKNearestNeighborClassifierAlgorithm(); clfs.append((knn.name, knn)) 
         
         # LogisticRegression
         import logistic_regression; reload(logistic_regression)
         from logistic_regression import MetaLogisticRegressionClassifierAlgorithm 
-        lr = MetaLogisticRegressionClassifierAlgorithm(); clfs.append((lr.name_, lr))
+        lr = MetaLogisticRegressionClassifierAlgorithm(); clfs.append((lr.name, lr))
         
         return clfs
 
@@ -111,48 +108,69 @@ class Classifiers(object):
             scores.append((name, val, loss))
         scores.sort(key=itemgetter(1), reverse=True)
         if self.verbose > 0:
-            for name, met, loss in scores: print("log_loss: %.4f \t %s: %.4f \t %s"%(loss, metric, met, name))
+            for name, met, loss in scores: print("log_loss: %.4f \t %s: %.4f \t %s" % (loss, metric, met, name))
         return scores
     
-    def optimize_classifiers(self, X, y, n_iter=12, scoring='accuracy', cv=10, n_jobs=1, sample_hyperparams=False):
+    def optimize_classifiers(self, X, y, n_iter=12, scoring='accuracy', cv=10, n_jobs=1, sample_hyperparams=False, min_hyperparams=2, get_hyperparams=False):
         """
-        This method is a wrapper to cross validation, wherein we optimize each available algorithm
+        Docstring:
+        
+        This method is a wrapper to cross validation using RandomizedSearchCV from scikit-learn, wherein we optimize each defined algorithm
+        Default behavior is to optimize all parameters available to each algorithm, but it is possible to sample (randomly) a subset of them
+        to optimize (sample_hyperparams=True), or to choose a set of parameters (get_hyperparams=True).
+        
+        Input parameters:
+        ------------------
+        X: data matrix (n_samples, n_features)
+        y: labels/ground truth (n_samples,)
+        
+        n_iter: (int: 1) number of iterations to use in RandomizedSearchCV method, i.e. number of independent draws from parameter dictionary
+        scoring: (str or callable: 'accuracy') type of scorer to use in optimization
+        cv: (int or callable: 10) number of cross validation folds, or callable of correct type
+        n_jobs: (int: 1) specify number of parallel processes to use
+        
+        sample_hyperparams: (bool: False) randomly sample a subset of algorithm parameters and tune these  
+        min_hyperparams: (int: 2) when sample_hyperparams=True, choose number of parameters to sample
+        get_hyperparams: (bool: False) instead of random sampling, use previously chosen set of parameters to optimize (must be preceeded by ...)
+        
+        Ouput:
+        ------------------
+        List containing (classifier name, most optimized classifier) tuples
+        
         """
         import time
         import warnings
         from sklearn.model_selection import RandomizedSearchCV
         
-        optimized = list()        
-        for name, algo in self.clf:
-            
-            estimator, param_dist = algo.estimator, algo.cv_params
-            
-            # TODO: fix
-            if type(param_dist) == list: 
-                param_dist = param_dist[0]
-            
-            if sample_hyperparams:
-                from scipy.stats import randint
-                param_dist = algo.set_hyparms(param_dist, randint(1, len(param_dist)))
-
+        optimized = []
+        
+        for name, classifier in self.clf:            
+            estimator, param_dist = classifier.estimator, classifier.cv_params            
+            if sample_hyperparams and not get_hyperparams:
+                # Here we (by default, but other behaviors are also possible) sample randomly
+                # [1, number hyperparams] to optimize in the cross-validation loop
+                num_params = np.random.randint(min_hyperparams, len(param_dist))
+                param_dist = classifier.sample_hyperparams(classifier.cv_params, num_params=num_params, mode='random', keys=[])
+            if get_hyperparams and not sample_hyperparams:
+                if len(classifier.cv_params_to_tune) > 0:
+                    print("(%s): overriding current parameter dictionary using 'cv_params_to_tune'" % name)
+                    param_dist = classifier.sample_hyperparams(classifier.cv_params, num_params=-1, mode='select', keys=classifier.cv_params_to_tune)            
             if self.verbose>0:
                 print("Starting grid search for '%s'" % name)
-            
+            search = RandomizedSearchCV(estimator, param_distributions=param_dist, n_iter=n_iter, scoring=scoring, 
+                                        cv=cv, n_jobs=n_jobs, verbose=self.verbose, error_score=0, return_train_score=True)
             start_time = time.time()
             try:
-                search = RandomizedSearchCV(estimator, param_distributions=param_dist, 
-                                            n_iter=n_iter, scoring=scoring, 
-                                            cv=cv, n_jobs=n_jobs, verbose=self.verbose, 
-                                            error_score=0, return_train_score=True)
                 search.fit(X, y)
             except:
                 warnings.warn("Warning: (Estimator='%s') failed: '%s'" % (name, sys.exc_info()[1]))
             else:
-                print("Best mean score: %.4f (%s)" % (search.best_score_, name))
-            
-            print("Iteration time = %.2f min." % ((time.time()-start_time)/60.)
-            optimized.append((name, search.best_estimator_))
-        
+                if isinstance(scoring, str):
+                    print("(Scoring='%s')\tBest mean score: %.4f (%s)" % (scoring, search.best_score_, name))
+                else:
+                    print("Best mean score: %.4f (%s)" % (search.best_score_, name))            
+            print("Iteration time = %.2f min." % ((time.time()-start_time)/60.))            
+            optimized.append((name, search.best_estimator_))        
         # Re-write later: for now just return a list of optimized estimators
         # Perhaps we should return the grids themselves
         return optimized

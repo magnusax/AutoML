@@ -24,10 +24,12 @@ class MetaLogisticRegressionClassifierAlgorithm(BaseClassifier):
         self.random_state = random_state
         
         # Initialize algorithm and make it available
-        self.estimator = self.get_clf()
-        
+        self.estimator = self.get_clf()        
         # Initialize dictionary with trainable parameters
         self.cv_params = self._set_cv_params()
+        # Initialize list which can be populated with params to tune 
+        self.cv_params_to_tune = []
+
         
     def get_clf(self):
         return LogisticRegression(penalty = self.penalty, 
@@ -60,11 +62,11 @@ class MetaLogisticRegressionClassifierAlgorithm(BaseClassifier):
                 warnings.warn("warning: '%s' not set (%s)" % (param, sys.exc_info()[1]))
         return 
     
-    def set_hyparms(self, params, num_params, mode, keys):
+    def sample_hyperparams(self, params, num_params, mode, keys):
         # We let the child class inherit a general method from its super class
         return super().trainable_hyperparams(params, num_params, mode, keys)  
         
-    def _set_cv_params(self)
+    def _set_cv_params(self):
         """
         Dictionary containing all trainable parameters
        (Consider making it public)        
@@ -76,14 +78,14 @@ class MetaLogisticRegressionClassifierAlgorithm(BaseClassifier):
             Check if there are methods in scipy.stats which can replace this method
             If you want deterministic output, then set np.random.seed 
             """
-            return np.random.choice([pow(10, float(f)) for f in np.linspace(-7, 7, 1000)], num_samples)
+            return np.random.choice([pow(10, float(f)) for f in np.linspace(-7, 7, 10000)], num_samples)
         
         # Trainable params available in self.cv_params().keys()
         return { 'penalty': ['l1','l2'],
-                 'C': stochastic_C(100),
+                 'C': stochastic_C(1000), # sample 1000 C-values 
                  'fit_intercept': [True, False],
                  'class_weight': ['balanced', None],
-                 'max_iter': [100, 200] }
+                 'max_iter': [50, 100, 200] }
                                   
 if __name__ == '__main__':
     import sys

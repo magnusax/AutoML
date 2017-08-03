@@ -3,6 +3,15 @@ import numpy as np
 import sys
 import os
 
+
+
+
+
+# Modules below this line are unused and should be scheduled for removal
+# ----------------------------------------------------------------------------------------------
+
+
+
 def load_titanic_1():
 
     df = pd.read_excel('../datasets/titanic3.xls', 'titanic3', index_col=None, na_values=['NA'])

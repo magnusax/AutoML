@@ -26,7 +26,7 @@ class BaseClassifier():
             
         """        
         if not isinstance(params, dict):
-            raise TypeError("Expected 'dict' type. Got '%s'" % type(params)
+            raise TypeError("Expected 'dict' type. Got '%s'" % type(params))
         if not mode in ['random', 'select']:
             raise ValueError("mode should be 'random' or 'select'.")
         
@@ -36,7 +36,7 @@ class BaseClassifier():
             import random                             
             if not 0<num_params<=len(items):
                 raise ValueError("Expect 0 < num_params <= items in dict.")
-            return dict(random.sample(items, num_params, replace=False))
+            return dict(random.sample(items, num_params))
         
         elif mode == 'select':
             if not 0<len(keys)<=len(items): 
