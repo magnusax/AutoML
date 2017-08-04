@@ -102,7 +102,16 @@ class MetaWrapperClassifier():
     
     def predict_classifiers(self, X):
         return [(name, clf.estimator.predict(X)) for name, clf in self.clf]
-
+    
+    def predict_proba_classifiers(self, X):
+        probas = []
+        for name, clf in self.clf:
+            # Check if classifier implements 'predict_proba'
+            d = clf.get_info()
+            if d['predict_probas']:
+                probas.append((name, clf.estimator.predict_proba(X)))
+        return probas
+    
     def classifier_performance(self, preds, y_true, metric='accuracy', multiclass=False, **kwargs):
         """
         **kwargs gives us the possibility to send extra parameters when computing various metrics
@@ -134,8 +143,7 @@ class MetaWrapperClassifier():
                 yhat = lb.fit_transform(y_pred)
             else:
                 yhat = np.array(y_pred)
-            loss = log_loss(y_true, yhat)
-            
+            loss = log_loss(y_true, yhat)            
             scores.append((name, val, loss))
                         
         scores.sort(key=itemgetter(1), reverse=True)

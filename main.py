@@ -33,10 +33,17 @@ def main():
     # Get predictions
     y_train_pred = clfs.predict_classifiers(X_train)
     
+    # How to check multi-class or not
     multiclass = True if len(np.unique(y_train_pred[0][1]))>2 else False
     print('multiclass classification? Answer: ', multiclass)
     
-    # Evaulate performance
+    # Get probabilities (handy when attempting to do ensembling later on)
+    train_probas = clfs.predict_proba_classifiers(X_test)
+    
+    # Get log loss when doing probabilities (e.g. metric='accuracy' will not work)
+    train_scores = clfs.classifier_performance(train_probas, y_test, metric='log_loss', multiclass=True)    
+        
+    # Evaulate performance in terms of accuracy this time
     print("Training scores:")
     train_scores = clfs.classifier_performance(y_train_pred, y_train, metric='accuracy', multiclass=multiclass)
         
@@ -46,14 +53,13 @@ def main():
         
     # Alternatively: optimize each classifier using a cross-validation scheme
     print("Cross validation with randomly drawn parameter realizations:")
-    clfs.verbose = 0
-    optims = clfs.optimize_classifiers(X_train, y_train, n_iter=12, n_jobs=-1, random_state=0)
+    clfs.verbose = 1
+    optims = clfs.optimize_classifiers(X_train, y_train, n_iter=100, n_jobs=-1, random_state=1)
     for name, optimized_clf in optims: # Classifiers are already fitted (re-training redundant)
         print(name, 
               'train score:', accuracy_score(optimized_clf.predict(X_train), y_train), 
               'test score:',  accuracy_score(optimized_clf.predict(X_test), y_test)
         )
-        print()
     
     # This method expects a list of 2-tuples and can either return a matplotlib.pyplot.figure object, or 
     # as in this case, save a figure to the current working directory ('fig.png'). The plot will be in the form 
