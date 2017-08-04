@@ -103,11 +103,12 @@ class MetaWrapperClassifier():
     def predict_classifiers(self, X):
         return [(name, clf.estimator.predict(X)) for name, clf in self.clf]
 
-    def classifier_performance(self, preds, y_true, metric='accuracy', **kwargs):
+    def classifier_performance(self, preds, y_true, metric='accuracy', multiclass=False, **kwargs):
         """
         **kwargs gives us the possibility to send extra parameters when computing various metrics
         
         """
+        import numpy as np
         from operator import itemgetter
         from sklearn.metrics import accuracy_score, roc_auc_score, f1_score, recall_score, precision_score, log_loss
         
@@ -127,13 +128,21 @@ class MetaWrapperClassifier():
         
         for name, y_pred in preds:
             val = scorer(y_true, y_pred)
-            loss = log_loss(y_true, y_pred)
+            if multiclass and len(np.array(y_pred).shape) == 1:
+                from sklearn.preprocessing import LabelBinarizer
+                lb = LabelBinarizer()
+                yhat = lb.fit_transform(y_pred)
+            else:
+                yhat = np.array(y_pred)
+            loss = log_loss(y_true, yhat)
+            
             scores.append((name, val, loss))
-        
+                        
         scores.sort(key=itemgetter(1), reverse=True)
         
         if self.verbose > 0:
             for name, met, loss in scores: print("log_loss: %.4f \t %s: %.4f \t %s" % (loss, metric, met, name))
+            ##for name, met in scores: print("%s: %.4f \t %s" % (metric, met, name))
         return scores
     
     def optimize_classifiers(self, X, y, n_iter=12, scoring='accuracy', cv=10, n_jobs=1, 

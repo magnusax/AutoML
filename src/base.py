@@ -1,5 +1,5 @@
 """
-Module contaning definintions of base Classes.
+Module containing definitions of base Classes.
 """
 
 
@@ -59,7 +59,7 @@ class EnsembleBaseClassifier():
     def set_base_estimator(self, clf):
         pass
     
-     def trainable_hyperparams(self, params:dict, num_params:int=1, mode:str='random', keys:list=[]) -> dict:
+    def trainable_hyperparams(self, params, num_params=1, mode='random', keys=[]):
         """
         Docstring:
         
