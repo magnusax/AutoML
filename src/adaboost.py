@@ -2,11 +2,11 @@ from scipy.stats import randint, uniform
 from sklearn.ensemble import AdaBoostClassifier, AdaBoostRegressor
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.linear_model import LogisticRegression
-# Import base classifier and regressor objects
-from base import BaseClassifier, BaseRegressor
+# Import base ensemle classifier and regressor objects
+from base import EnsembleBaseClassifier, EnsembleBaseRegressor
 
 
-class MetaAdaBoostRegressorAlgorithm(BaseRegressor):
+class MetaAdaBoostRegressorAlgorithm(EnsembleBaseRegressor):
     """ 
     Regression object
     """
@@ -14,7 +14,7 @@ class MetaAdaBoostRegressorAlgorithm(BaseRegressor):
         return AdaBoostRegressor()
 
     
-class MetaAdaBoostClassifierAlgorithm(BaseClassifier):
+class MetaAdaBoostClassifierAlgorithm(EnsembleBaseClassifier):
     """
     Meta classifier object that sits on top of scikit-learn's
     'adaboost' algorithm. We provide extra utilities and functionality
@@ -22,12 +22,10 @@ class MetaAdaBoostClassifierAlgorithm(BaseClassifier):
     """
     def __init__(self, base_estimator=None, n_estimators=50, learning_rate=0.1, algorithm='SAMME.R', random_state=None):
         self.name = "adaboost"
-        
-        if base_estimator == 'logreg':
-            self.base_estimator = LogisticRegression()
-        else:
+        if base_estimator is None:
             self.base_estimator = DecisionTreeClassifier()
-        
+        else:
+            self.base_estimator = base_estimator
         self.n_estimators = n_estimators
         self.learning_rate = learning_rate
         self.algorithm = algorithm

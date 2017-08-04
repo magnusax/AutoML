@@ -1,80 +1,99 @@
-import numpy as np
-import sys
-import os
 import seaborn as sns; sns.set()
 from matplotlib import pyplot as plt
 
 
-class Classifiers():
+class MetaWrapperClassifier():
     """
-    Class that keeps track of which classifiers we have available. 
+    Docstring:
+    
+    Class that keeps track of available classifiers and implements functionality around them
+    
     Input:
+    ------------------
        method = str: ('random' : Choose num_sample random classifiers (default),
-                       'complete' : Choose all available classifiers,
-                       'chosen' : Send in a list (iterable will work) of classifier names and initialize)  
-       num_sample = int: Choose number of classifiers to sample (defult: 3. Used when method == 'random', else ignored)
-           clf = list (list-like will also work): Send a list of classifiers to initialize (default: []. Used when method == 'chosen')
+                      'complete' : Choose all available classifiers,
+                      'chosen' : Send in a list (iterable will work) of classifier names and initialize)
+                      
+       num_sample: (int: 3) choose number of classifiers to sample. Used when method == 'random'
+       estimators: (None or list/list-like: None): Send a list of classifiers to initialize. Used when method == 'chosen'
+       base_estimator: (None or sklearn-type estimator: None) decide which classifier to use as a weak learner for ensemble methods
+       verbose: (int, 0) if > 0 then be 'chatty'
+       
     Output:
-       List of classifiers 
+    ------------------
+    List of classifiers 
        
     """
-    def __init__(self, method='random', num_sample=3, clf=None, verbose=0):
-        self.verbose = verbose        
+    def __init__(self, method='random', num_sample=3, estimators=None, base_estimator=None, verbose=0):                    
+        
         if method not in ['random', 'complete', 'chosen']:
-            raise ValueError("'method' should be either {'random', 'complete', 'chosen'}.")        
-        if method == 'chosen' and clf is None:
+            raise ValueError("'method' should be either ['random', 'complete', 'chosen'].")        
+        
+        if method == 'chosen' and (estimators is None or len(estimators) == 0):
             suggestions = [name for name, _ in self.__build_classifier_repository()]
             raise ValueError("Specify name of at least one (1) classifier in list (iterable) 'clf'. \nValid options: %s" % suggestions)        
+        
+        self.verbose = verbose   
         self.method = method
-        self.num_sample = num_sample        
+        self.num_sample = num_sample
+        self.base_estimator = base_estimator
+        
         if method == 'chosen':
-            self.clf = [(name, c) for name, c in self.__build_classifier_repository() if name in clf]
+            self.clf = [(name, c) for name, c in self.__build_classifier_repository() if name in estimators]
         else:
-            self.clf = self.__build_classifier_list()      
+            self.clf = self.__build_classifier_list()           
+        
         if self.verbose > 0:    
-            print("Initialized classifiers:", end="\n")
+            print("Initialized classifiers:")
             for name, _ in self.clf:
                 print("\t%s" % name)          
         
     def __build_classifier_list(self):
         clfs = self.__build_classifier_repository()
+        
         if self.method == 'random':
             print("Sampling %i algorithms..." % self.num_sample)
             from numpy import random
             clfs = [clfs[i] for i in random.choice(len(clfs), self.num_sample, replace=False)]
+        
         return clfs
         
     def __build_classifier_repository(self):
         """
-        Keep a list of all classifiers
-        """
-        clfs = list()
+        Return list of (classifier_name, classifier) tuples
         
-        from importlib import reload
-        
-        # AdaBoost
-        import adaboost; reload(adaboost)
-        from adaboost import MetaAdaBoostClassifierAlgorithm 
-        ada = MetaAdaBoostClassifierAlgorithm(); clfs.append((ada.name, ada))
-        
-        # KNearestNeighbors
-        import nearest_neighbors; reload(nearest_neighbors)
-        from nearest_neighbors import MetaKNearestNeighborClassifierAlgorithm 
-        knn = MetaKNearestNeighborClassifierAlgorithm(); clfs.append((knn.name, knn)) 
-        
-        # LogisticRegression
-        import logistic_regression; reload(logistic_regression)
-        from logistic_regression import MetaLogisticRegressionClassifierAlgorithm 
-        lr = MetaLogisticRegressionClassifierAlgorithm(); clfs.append((lr.name, lr))
-        
-        return clfs
+        """        
+        # This list of tuples contains all importable algorithms
+        # TODO: move this to a separate module containing algorithms only
+        algorithms = [
+            ('adaboost', 'MetaAdaBoostClassifierAlgorithm'), 
+            ('nearest_neighbors', 'MetaKNearestNeighborClassifierAlgorithm'), 
+            ('logistic_regression', 'MetaLogisticRegressionClassifierAlgorithm') 
+        ]                
+        return [self.add_algorithm(m, c) for m, c in algorithms]
 
+    def add_algorithm(self, module_name, algorithm_name):
+        from base import EnsembleBaseClassifier      
+        from importlib import reload, import_module                       
+        try:
+            module = import_module(module_name)
+        except:
+            raise ValueError("Could not import module '%s'" % module_name)                
+        algorithm = getattr(module, algorithm_name)
+
+        if issubclass(algorithm, EnsembleBaseClassifier):
+            instance = algorithm(base_estimator=self.base_estimator)
+        else:
+            instance = algorithm()
+        return instance.name, instance
+    
     def fit_classifiers(self, X, y, n_jobs=1):
         import time
         for name, clf in self.clf:
             try:
                 clf.estimator.set_params(**{'n_jobs': n_jobs})
-            except: pass
+            except: 
+                pass
             st = time.time()
             clf.estimator.fit(X, y)
             if self.verbose > 0:
@@ -87,9 +106,11 @@ class Classifiers():
     def classifier_performance(self, preds, y_true, metric='accuracy', **kwargs):
         """
         **kwargs gives us the possibility to send extra parameters when computing various metrics
+        
         """
         from operator import itemgetter
         from sklearn.metrics import accuracy_score, roc_auc_score, f1_score, recall_score, precision_score, log_loss
+        
         # List of supported metric names and the corresponding method (tuples)
         metrics = [('accuracy', accuracy_score),
                    ('auc', roc_auc_score),
@@ -98,20 +119,25 @@ class Classifiers():
                    ('precision', precision_score),
                    ('log_loss', log_loss),]
         metrics_names = [f for f, _ in metrics]
+        
         if not metric in metrics_names:
             raise ValueError("'metric' should be one of the following: '%s'" % ", ".join(metrics_names))
         scorer = [sc for name, sc in metrics if name == metric][0]
         scores = []
+        
         for name, y_pred in preds:
             val = scorer(y_true, y_pred)
             loss = log_loss(y_true, y_pred)
             scores.append((name, val, loss))
+        
         scores.sort(key=itemgetter(1), reverse=True)
+        
         if self.verbose > 0:
             for name, met, loss in scores: print("log_loss: %.4f \t %s: %.4f \t %s" % (loss, metric, met, name))
         return scores
     
-    def optimize_classifiers(self, X, y, n_iter=12, scoring='accuracy', cv=10, n_jobs=1, sample_hyperparams=False, min_hyperparams=2, get_hyperparams=False):
+    def optimize_classifiers(self, X, y, n_iter=12, scoring='accuracy', cv=10, n_jobs=1, 
+                             sample_hyperparams=False, min_hyperparams=2, get_hyperparams=False, random_state=None):
         """
         Docstring:
         
@@ -132,6 +158,7 @@ class Classifiers():
         sample_hyperparams: (bool: False) randomly sample a subset of algorithm parameters and tune these  
         min_hyperparams: (int: 2) when sample_hyperparams=True, choose number of parameters to sample
         get_hyperparams: (bool: False) instead of random sampling, use previously chosen set of parameters to optimize (must be preceeded by ...)
+        random_state: (None or int: None) used for reproducible results
         
         Ouput:
         ------------------
@@ -146,20 +173,24 @@ class Classifiers():
         
         for name, classifier in self.clf:            
             estimator, param_dist = classifier.estimator, classifier.cv_params            
+            
             if sample_hyperparams and not get_hyperparams:
                 # Here we (by default, but other behaviors are also possible) sample randomly
                 # [1, number hyperparams] to optimize in the cross-validation loop
                 num_params = np.random.randint(min_hyperparams, len(param_dist))
                 param_dist = classifier.sample_hyperparams(classifier.cv_params, num_params=num_params, mode='random', keys=[])
+            
             if get_hyperparams and not sample_hyperparams:
                 if len(classifier.cv_params_to_tune) > 0:
                     print("(%s): overriding current parameter dictionary using 'cv_params_to_tune'" % name)
                     param_dist = classifier.sample_hyperparams(classifier.cv_params, num_params=-1, mode='select', keys=classifier.cv_params_to_tune)            
+            
             if self.verbose>0:
                 print("Starting grid search for '%s'" % name)
             search = RandomizedSearchCV(estimator, param_distributions=param_dist, n_iter=n_iter, scoring=scoring, 
-                                        cv=cv, n_jobs=n_jobs, verbose=self.verbose, error_score=0, return_train_score=True)
-            start_time = time.time()
+                                        cv=cv, n_jobs=n_jobs, verbose=self.verbose, error_score=0, return_train_score=True,
+                                        random_state=random_state)
+            start_time = time.time()            
             try:
                 search.fit(X, y)
             except:
@@ -170,8 +201,10 @@ class Classifiers():
                 else:
                     print("Best mean score: %.4f (%s)" % (search.best_score_, name))            
             print("Iteration time = %.2f min." % ((time.time()-start_time)/60.))            
+            
             optimized.append((name, search.best_estimator_))        
-        # Re-write later: for now just return a list of optimized estimators
+        
+        # Rewrite later: for now just return a list of optimized estimators
         # Perhaps we should return the grids themselves
         return optimized
 
@@ -217,4 +250,5 @@ class CheckClassifierCorrelation():
         return f
         
 if __name__ == '__main__':
+    import sys
     sys.exit(-1)     
