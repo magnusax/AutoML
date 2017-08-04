@@ -65,18 +65,19 @@ class MetaLogisticRegressionClassifierAlgorithm(BaseClassifier):
     def sample_hyperparams(self, params, num_params, mode, keys):
         # We let the child class inherit a general method from its super class
         return super().trainable_hyperparams(params, num_params, mode, keys)  
-        
+    
     def _set_cv_params(self):
         """
         Dictionary containing all trainable parameters
-       (Consider making it public)        
+        
         """
         # Prefer to keep method private
         def stochastic_C(num_samples): 
             """ 
             Return randomly sampled floats in [10^-7, 10^7]
             Check if there are methods in scipy.stats which can replace this method
-            If you want deterministic output, then set np.random.seed 
+            If you want deterministic output, then set np.random.seed
+            
             """
             return np.random.choice([pow(10, float(f)) for f in np.linspace(-7, 7, 10000)], num_samples)
         

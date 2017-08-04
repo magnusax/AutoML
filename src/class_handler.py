@@ -24,7 +24,7 @@ class MetaWrapperClassifier():
     List of classifiers 
        
     """
-    def __init__(self, method='random', num_sample=3, estimators=None, base_estimator=None, verbose=0):                    
+    def __init__(self, method='random', num_sample=3, estimators=None, base_estimator=None, exclude=None, verbose=0):                    
         
         if method not in ['random', 'complete', 'chosen']:
             raise ValueError("'method' should be either ['random', 'complete', 'chosen'].")        
@@ -37,6 +37,7 @@ class MetaWrapperClassifier():
         self.method = method
         self.num_sample = num_sample
         self.base_estimator = base_estimator
+        self.exclude = exclude
         
         if method == 'chosen':
             self.clf = [(name, c) for name, c in self.__build_classifier_repository() if name in estimators]
@@ -69,8 +70,11 @@ class MetaWrapperClassifier():
             ('adaboost', 'MetaAdaBoostClassifierAlgorithm'), 
             ('nearest_neighbors', 'MetaKNearestNeighborClassifierAlgorithm'), 
             ('logistic_regression', 'MetaLogisticRegressionClassifierAlgorithm') 
-        ]                
-        return [self.add_algorithm(m, c) for m, c in algorithms]
+        ]
+        if self.exclude is None:
+            return [self.add_algorithm(m, c) for m, c in algorithms]
+        else:
+            return [self.add_algorithm(m, c) for m, c in algorithms if not m in self.exclude]
 
     def add_algorithm(self, module_name, algorithm_name):
         from base import EnsembleBaseClassifier      
