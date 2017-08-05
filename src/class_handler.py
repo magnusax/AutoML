@@ -69,7 +69,10 @@ class MetaWrapperClassifier():
         algorithms = [
             ('adaboost', 'MetaAdaBoostClassifierAlgorithm'), 
             ('nearest_neighbors', 'MetaKNearestNeighborClassifierAlgorithm'), 
-            ('logistic_regression', 'MetaLogisticRegressionClassifierAlgorithm') 
+            ('logistic_regression', 'MetaLogisticRegressionClassifierAlgorithm'),
+            ('naive_bayes', 'MetaGaussianNBayesClassifierAlgorithm'),
+            ('naive_bayes', 'MetaMultinomialNBayesClassifierAlgorithm'),
+            ('naive_bayes', 'MetaBernoulliNBayesClassifierAlgorithm'),
         ]
         if self.exclude is None:
             return [self.add_algorithm(m, c) for m, c in algorithms]
@@ -186,6 +189,7 @@ class MetaWrapperClassifier():
         List containing (classifier name, most optimized classifier) tuples
         
         """
+        import sys
         import time
         import warnings
         from sklearn.model_selection import RandomizedSearchCV
@@ -206,24 +210,31 @@ class MetaWrapperClassifier():
                     print("(%s): overriding current parameter dictionary using 'cv_params_to_tune'" % name)
                     param_dist = classifier.sample_hyperparams(classifier.cv_params, num_params=-1, mode='select', keys=classifier.cv_params_to_tune)            
             
+            n_iter_ = min(n_iter, classifier.max_n_iter)
+            
             if self.verbose>0:
                 print("Starting grid search for '%s'" % name)
-            search = RandomizedSearchCV(estimator, param_distributions=param_dist, n_iter=n_iter, scoring=scoring, 
-                                        cv=cv, n_jobs=n_jobs, verbose=self.verbose, error_score=0, return_train_score=True,
-                                        random_state=random_state)
-            start_time = time.time()            
+                print("Setting 'n_iter' to:",n_iter_)
+            
+            search = RandomizedSearchCV(estimator, param_distributions=param_dist, n_iter=n_iter_, 
+                                        scoring=scoring, cv=cv, n_jobs=n_jobs, verbose=self.verbose, 
+                                        error_score=0, return_train_score=True, random_state=random_state)
+            start_time = time.time()
             try:
                 search.fit(X, y)
             except:
-                warnings.warn("Warning: (Estimator='%s') failed: '%s'" % (name, sys.exc_info()[1]))
+                warnings.warn("Estimator '%s' failed (likey: 'n_iter' too high). \nAdding un-optimized version..." % name)
+                optimized.append((name, estimator.fit(X,y)))
             else:
+                optimized.append((name, search.best_estimator_))
                 if isinstance(scoring, str):
                     print("(Scoring='%s')\tBest mean score: %.4f (%s)" % (scoring, search.best_score_, name))
                 else:
-                    print("Best mean score: %.4f (%s)" % (search.best_score_, name))            
+                    print("Best mean score: %.4f (%s)" % (search.best_score_, name))  
+                    
             print("Iteration time = %.2f min." % ((time.time()-start_time)/60.))            
             
-            optimized.append((name, search.best_estimator_))        
+                    
         
         # Rewrite later: for now just return a list of optimized estimators
         # Perhaps we should return the grids themselves

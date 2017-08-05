@@ -15,6 +15,7 @@ class MetaLogisticRegressionClassifierAlgorithm(BaseClassifier):
     def __init__(self, penalty='l2', C=1.0, fit_intercept=True, random_state=None, solver='liblinear', max_iter=100, warm_start=False):
         
         self.name = "logreg"
+        self.max_n_iter = 1000
         self.penalty = penalty
         self.C = C
         self.fit_intercept = fit_intercept

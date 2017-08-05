@@ -1,16 +1,18 @@
-, , BernoulliNB
 from base import BaseClassifier
+from sklearn.naive_bayes import GaussianNB
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.naive_bayes import BernoulliNB
 
 
-class MetaGNBayesClassifierAlgorithm(BaseClassifier):
+class MetaGaussianNBayesClassifierAlgorithm(BaseClassifier):
     """
     Docstring:    
     Gaussian naive bayes classifier
     """
-    from sklearn.naive_bayes import GaussianNB
     
-    def __init__(priors=None):
+    def __init__(self, priors=None):
         self.name = 'gaussian_nb'
+        self.max_n_iter = 0
         self.priors = priors                    
         # Initialize algorithm and make it available
         self.estimator = self.get_clf()        
@@ -28,33 +30,20 @@ class MetaGNBayesClassifierAlgorithm(BaseClassifier):
                 'does_regression': False, 
                 'predict_probas': hasattr(self.estimator, 'predict_proba')}    
     
-    def adjust_param(self, d):
-        """
-        Update parameter values in algorithm
-        """
-        import warnings        
-        if not isinstance(d, dict):
-            raise ValueError("Expect 'dict'. Got '%s'" % type(d))        
-        for param, value in d.items():
-            try: 
-                self.estimator.set_params(**{param:value})
-            except: 
-                warnings.warn("warning: '%s' not set (%s)" % (param, sys.exc_info()[1]))
-        return 
-    
-    def sample_hyperparams(self, params, num_params, mode, keys):
-        # We let the child class inherit a general method from its super class
+    def adjust_params(self, params):
+        """ Update parameter values in algorithm """
+        return super().adjust_params(params)
+
+    def sample_hyperparams(self, params, num_params=1, mode='random', keys=[]):
+        """ Sample a subset of hyperparameters to optimize """
         return super().trainable_hyperparams(params, num_params, mode, keys)  
         
     def _set_cv_params(self):
-        """
-        Dictionary containing all trainable parameters
-        
-        """
+        """ Dictionary containing all trainable parameters """
         return {}
 
-    
-class MetaMultinomNBayesClassifierAlgorithm(BaseClassifier):
+        
+class MetaMultinomialNBayesClassifierAlgorithm(BaseClassifier):
     """
     Docstring:    
     Multinomial naive bayes classifier
@@ -65,10 +54,10 @@ class MetaMultinomNBayesClassifierAlgorithm(BaseClassifier):
     Laplace smoothing, while alpha < 1 is called Lidstone smoothing.
     
     """
-    from sklearn.naive_bayes import MultinomialNB
     
-    def __init__(alpha=1.0, fit_prior=True, class_prior=None):
+    def __init__(self, alpha=1.0, fit_prior=True, class_prior=None):
         self.name = 'multinomial_nb'
+        self.max_n_iter = 50
         self.alpha = alpha
         self.fit_prior = fit_prior
         self.class_prior = class_prior
@@ -91,53 +80,69 @@ class MetaMultinomNBayesClassifierAlgorithm(BaseClassifier):
                 'does_regression': False, 
                 'predict_probas': hasattr(self.estimator, 'predict_proba')}    
     
-    def adjust_param(self, d):
-        """
-        Update parameter values in algorithm
-        """
-        import warnings        
-        if not isinstance(d, dict):
-            raise ValueError("Expect 'dict'. Got '%s'" % type(d))        
-        for param, value in d.items():
-            try: 
-                self.estimator.set_params(**{param:value})
-            except: 
-                warnings.warn("warning: '%s' not set (%s)" % (param, sys.exc_info()[1]))
-        return 
-    
-    def sample_hyperparams(self, params, num_params, mode, keys):
-        # We let the child class inherit a general method from its super class
-        return super().trainable_hyperparams(params, num_params, mode, keys)  
+    def adjust_params(self, params):
+        """ Update parameter values in algorithm """
+        return super().adjust_params(params)
+
+    def sample_hyperparams(self, params, num_params=1, mode='random', keys=[]):
+        """ Sample a subset of hyperparameters to optimize """
+        return super().trainable_hyperparams(params, num_params, mode, keys)   
         
     def _set_cv_params(self):
-        """
-        Dictionary containing all trainable parameters
-        
-        """
-        from scipy.stats import uniform as sp_uniform
-        return {'alpha': sp_uniform(0, 1)}    
+        """ Dictionary containing all trainable parameters """
+        from scipy.stats import uniform as sp_uniform        
+        return {'alpha': sp_uniform(0, 1),
+                'fit_prior': [True, False] }    
 
+
+class MetaBernoulliNBayesClassifierAlgorithm(BaseClassifier):
+    """
+    Docstring:    
+    Bernoulli naive bayes classifier
+    """
     
-  #  elif self.bayes_type == 'BernoulliNB':
-  #      return BernoulliNB(alpha = self.alpha, 
-  #                           binarize = self.binarize, 
-  #                           fit_prior = self.fit_prior, 
-  #                           class_prior = self.class_prior)
+    def __init__(self, alpha=1.0, binarize=0.0, fit_prior=True, class_prior=None):
+        self.name = 'bernoulli_nb'
+        self.max_n_iter = 50
+        self.alpha = alpha
+        self.binarize = binarize
+        self.fit_prior = fit_prior
+        self.class_prior = class_prior
+        
+        # Initialize algorithm and make it available
+        self.estimator = self.get_clf()        
+        # Initialize dictionary with trainable parameters
+        self.cv_params = self._set_cv_params()
+        # Initialize list which can be populated with params to tune 
+        self.cv_params_to_tune = []
+        
+    def get_clf(self):
+        return BernoulliNB(alpha = self.alpha,
+                           binarize = self.binarize, 
+                           fit_prior = self.fit_prior, 
+                           class_prior = self.class_prior)
     
+    def get_info(self):
+        return {'does_classification': True,
+                'does_multiclass': True,
+                'does_regression': False, 
+                'predict_probas': hasattr(self.estimator, 'predict_proba')}    
     
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
+    def adjust_params(self, params):
+        """ Update parameter values in algorithm """
+        return super().adjust_params(params)
+
+    def sample_hyperparams(self, params, num_params, mode, keys):
+        """ Sample a subset of hyperparameters to optimize """
+        return super().trainable_hyperparams(params, num_params, mode, keys)   
+        
+    def _set_cv_params(self):
+        """ Dictionary containing all trainable parameters """
+        from scipy.stats import uniform as sp_uniform        
+        return {'alpha': sp_uniform(0, 1),  
+                'fit_prior': [True, False] }    
+
+
 if __name__ == '__main__':
     import sys
     sys.exit(-1)

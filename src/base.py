@@ -8,8 +8,21 @@ class BaseClassifier():
     
     def __init__(self):
         self.__classname__ = 'BaseClassifier'
-    
-    def trainable_hyperparams(self, params:dict, num_params:int=1, mode:str='random', keys:list=[]) -> dict:
+        
+    def adjust_params(self, d:dict):
+        """ Adjust classifier parameter helper function """
+        import warnings
+        import sys       
+        if not isinstance(d, dict):
+            raise ValueError("Expect 'dict'. Got '%s'" % type(d))        
+        for p, val in d.items():
+            try: 
+                self.estimator.set_params(**{p:val})
+            except: 
+                warnings.warn("warning: '%s' not set (%s)" % (p, sys.exc_info()[1]))
+        return 
+        
+    def trainable_hyperparams(self, params, num_params=1, mode='random', keys=[]):
         """
         Docstring:
         
@@ -48,6 +61,7 @@ class BaseClassifier():
             if not len(par)>0: 
                 raise Exception("No trainable parameters found: check 'keys' input.")
             return par
+            
             
             
 class EnsembleBaseClassifier():

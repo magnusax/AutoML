@@ -12,6 +12,8 @@ class MetaKNearestNeighborClassifierAlgorithm(BaseClassifier):
     def __init__(self, n_neighbors=5, weights='uniform', algorithm='auto', leaf_size=30, p=2, metric='minkowski'):
         
         self.name = "nearestneigbors"
+        self.max_n_iter = 1000
+        
         self.n_neighbors = n_neighbors
         self.weights = weights
         self.algorithm = algorithm
@@ -41,24 +43,12 @@ class MetaKNearestNeighborClassifierAlgorithm(BaseClassifier):
                 'does_regression': False, 
                 'predict_probas': hasattr(self.estimator, 'predict_proba')}
     
-    def adjust_param(self, d):
-        """
-        Update parameter values in algorithm
-        """
-        import warnings
-        
-        if not isinstance(d, dict):
-            raise ValueError("Expect 'dict'. Got '%s'" % type(d))
-        
-        for param, value in d.items():
-            try: 
-                self.estimator.set_params(**{param:value})
-            except: 
-                warnings.warn("warning: '%s' not set (%s)" % (param, sys.exc_info()[1]))
-        return 
+    def adjust_params(self, params):
+        """ Update parameter values in algorithm """
+        return super().adjust_params(params)
     
     def sample_hyperparams(self, params, num_params, mode, keys):
-        # We let the child class inherit a general method from its super class
+        """ Sample or select subset of hyperparmameters """
         return super().trainable_hyperparams(params, num_params, mode, keys)
         
     def _set_cv_params(self):
@@ -66,7 +56,7 @@ class MetaKNearestNeighborClassifierAlgorithm(BaseClassifier):
         Dictionary containing all trainable parameters
        (Consider making it public)        
         """
-        return { 'n_neighbors': randint(2, 50),
+        return { 'n_neighbors': randint(2, 100),
                  'weights': ['uniform', 'distance'],
                  'algorithm': ['auto', 'ball_tree', 'kd_tree', 'brute'],
                  'leaf_size': [15, 30, 45], # see: http://scikit-learn.org/stable/modules/neighbors.html#neighbors (1.6.4.5. Effect of leaf_size)

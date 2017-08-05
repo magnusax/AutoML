@@ -13,8 +13,8 @@ However, some (perhaps) original ideas drawing upon the my background from stati
 Libraries which will be heavily relied upon are:
 
 ### Preprocessing
-* scikit-learn (for e.g. outlier detection and standardizing)
-* scipy
+* Scikit-learn (for e.g. outlier detection and standardizing)
+* Scipy
 * ...
 * More to follow
 
@@ -23,9 +23,9 @@ Libraries which will be heavily relied upon are:
 * Hypertools (convenient for visualizing e.g. low-dimensional representations of clusters)
 
 ### Learning and evaluation
-* scikit-learn
-* tensorflow/theano wrapped with keras
-* xgboost
+* Scikit-learn
+* Tensorflow/Theano wrapped with keras
+* Xgboost
 * ...
 * More to follow
 

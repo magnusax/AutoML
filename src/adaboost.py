@@ -22,6 +22,8 @@ class MetaAdaBoostClassifierAlgorithm(EnsembleBaseClassifier):
     """
     def __init__(self, base_estimator=None, n_estimators=50, learning_rate=0.1, algorithm='SAMME.R', random_state=None):
         self.name = "adaboost"
+        self.max_n_iter = 1000
+        
         if base_estimator is None:
             self.base_estimator = DecisionTreeClassifier()
         else:
