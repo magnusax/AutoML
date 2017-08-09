@@ -1,61 +1,80 @@
-import pandas as pd
-import numpy as np
-import sys
-import os
+"""
+Utility module where convenience methods are placed
+
+"""
+
+def skopt_space_mapping(name_params):
+    """
+    This method maps a dictionary of parameter settings to the appropriate scikit-optimize format 
+    
+    Input:
+    -------------
+    name_params: an iterable of (classifier name, classifier parameter dictionary) tuples
+    
+    Ouput:
+    -------------
+    A list of (classifier name, classifier dictionary in skopt space format)
+    
+    """
+    import numpy as np
+    from skopt.space import Real, Categorical, Integer        
+    
+    dicts = []
+    # If an iterable has 100 elements or more, we convert it to either discrete (Integer dist.)
+    # or continuous (Real dist.) distribution, with values between min(iterable) and max(iterable)
+    # This only happens when we see 1 single data type in the iterable
+    __THRESHOLD__ = 100
+    
+    for name, params in name_params:
+        res = {}
+        if len(params) > 0:
+            for k, iterable in params.items():
+                
+                # check if is a sampling distribution
+                if hasattr(iterable, 'rvs'):
+                    min_ = iterable.a
+                    max_ = iterable.b 
+                    test_val = iterable.rvs()
+                    if isinstance(test_val, float):
+                        res[k] = Real(min_, max_)
+                    else:
+                        res[k] = Integer(min_, max_+1)
+                    continue
+
+                data = [str(type(x)) for x in iterable]
+                n_data_types = len(np.unique(data))
+                
+                # check if 'iterable' really should be represented as a continous distribution
+                # despite not having the rvs property.
+                if (n_data_types == 1) and (len(data) >= __THRESHOLD__):
+                    test_val = iterable[0]                    
+                    try:
+                        min_ = min(iterable)
+                        max_ = max(iterable)
+                    except:
+                        res[k] = Categorical(list(iterable))
+                    else:
+                        if isinstance(test_val, float):
+                            min_ = 10**np.floor(np.log10(min_))
+                            max_ = 10**np.ceil(np.log10(max_))
+                            res[k] = Real(min_, max_, prior='log-uniform')
+                        elif isinstance(test_val, int):
+                            res[k] = Integer(min_, max_)
+                        else:
+                            res[k] = Categorical(list(iterable))
+                    continue
+                    
+                # if we get here, then 'iterable' definitely should be categorical
+                res[k] = Categorical(list(iterable))                
+                
+        dicts.append((name, res))    
+    return dicts
 
 
-
-
-
-# Modules below this line are unused and should be scheduled for removal
+# ----------------------------------------------------------------------------------------------
+#          Modules below this line are unused and should be scheduled for removal
 # ----------------------------------------------------------------------------------------------
 
-
-
-def load_titanic_1():
-
-    df = pd.read_excel('../datasets/titanic3.xls', 'titanic3', index_col=None, na_values=['NA'])
-    print("Loaded %i rows" % df.shape[0])
-    
-    for col in ['boat','body','home.dest']:
-        df.drop(col,axis=1,inplace=True)
-    
-    df = pd.concat([df, pd.get_dummies(df['sex'],prefix='sex')],axis=1)
-    df.drop('sex',axis=1,inplace=True)
-    
-    X, y = df[[col for col in df.columns.values if 'survived' not in col]], np.array(df.pop('survived')).ravel()
-    
-    for v in np.unique(y):
-        print("y-label = %s: Percent of data = %.1f%%"%(v,100*sum(y==v)/len(y)))
-    
-    return X,y
-
-
-def load_titanic_2(file):  
-    df = pd.read_csv(file, na_values=['NA'])
-    
-    y = np.array(df['Survived'])
-    df.drop('Survived', axis=1, inplace=True)
-    X = df.ix[:,:]
-    
-    print(X.columns)
-    
-    uninformative = ['PassengerId', 'Ticket', 'Name', 'Cabin']
-    for col in uninformative:
-        X.drop(col, axis=1, inplace=True)
-
-    information = [('Pclass', 'category'), ('Name', str), ('Sex', 'category'), 
-                   ('Age', np.int8), ('SibSp', 'category'), ('Parch', 'category'), 
-                   ('Fare', np.float32), ('Cabin', str), ('Embarked', 'category')
-    ]
-    X = one_of_k_encoding(['Pclass','Sex', 'SibSp', 'Parch', 'Embarked'], X)
-    
-    # Check for NaNs and if found impute most common value for now
-    from sklearn.preprocessing import Imputer
-    impute = Imputer(strategy='median', copy=False)
-    X = impute.fit_transform(X)
-    
-    return X, y
 
 def one_of_k_encoding(cols, df):
     """ Categorial encoding of columns where datatype is categorical. 
@@ -73,4 +92,5 @@ def one_of_k_encoding(cols, df):
 
 
 if __name__ == '__main__':
+    import sys
     sys.exit(-1)

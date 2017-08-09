@@ -243,23 +243,19 @@ class MetaWrapperClassifier():
         Use package 'scikit-optimize' >=0.3 in order to do Bayesian optimization instead of random grid search.
         Package URL: https://github.com/scikit-optimize/scikit-optimize/
         
-        """
-        
-        raise NotImplementedError("Not yet implemented")
-        
+        """        
+        raise NotImplementedError("Not yet implemented")       
         try: 
             import skopt
         except ImportError:
             raise ImportError("Package scikit-optimize not installed.")
-        else:
-            print("Successfully imported scikit-optimize.")
+            
         from skopt import BayesSearchCV
-        from skopt.space import Real, Categorical, Integer
         from sklearn.model_selection import cross_val_score
-        
+        from utils import skopt_space_mapping
 
-        
-        
+        # Compute skopt spaces
+        skopt_spaces = skopt_space_mapping([(nm, cl.cv_params) for nm, cl in self.clf])
         
     
 class CheckClassifierCorrelation():
