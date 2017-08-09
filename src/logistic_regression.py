@@ -52,10 +52,10 @@ class MetaLogisticRegressionClassifierAlgorithm(BaseClassifier):
         Update parameter values in algorithm
         """
         import warnings
+        import sys
         
         if not isinstance(d, dict):
             raise ValueError("Expect 'dict'. Got '%s'" % type(d))
-        
         for param, value in d.items():
             try: 
                 self.estimator.set_params(**{param:value})
@@ -77,8 +77,7 @@ class MetaLogisticRegressionClassifierAlgorithm(BaseClassifier):
             """ 
             Return randomly sampled floats in [10^-7, 10^7]
             Check if there are methods in scipy.stats which can replace this method
-            If you want deterministic output, then set np.random.seed
-            
+            If you want deterministic output, then set np.random.seed          
             """
             return np.random.choice([pow(10, float(f)) for f in np.linspace(-7, 7, 10000)], num_samples)
         

@@ -9,19 +9,28 @@ class BaseClassifier():
     def __init__(self):
         self.__classname__ = 'BaseClassifier'
         
-    def adjust_params(self, d:dict):
+    def adjust_params(self, parms):
         """ Adjust classifier parameter helper function """
         import warnings
         import sys       
-        if not isinstance(d, dict):
-            raise ValueError("Expect 'dict'. Got '%s'" % type(d))        
-        for p, val in d.items():
+        if not isinstance(parms, dict):
+            raise ValueError("Expect 'dict'. Got '%s'" % type(parms))        
+        for k, v in parms.items():
             try: 
-                self.estimator.set_params(**{p:val})
+                self.estimator.set_params(**{k:v})
             except: 
-                warnings.warn("warning: '%s' not set (%s)" % (p, sys.exc_info()[1]))
+                warnings.warn("warning: '%s' not set (%s)" % (k, sys.exc_info()[1]))
         return 
-        
+    
+    def freeze_cv_params(self, parms):
+        """ Freeze a trainable parameter to fixed value. Useful for when grid searching """
+        if not instancde(parms, dict):
+            raise ValueError("Expect 'dict'. Got '%s'" % type(parms))
+        for k, v in parms.items():
+            if k in self.estimator.cv_params.keys():
+                self.estimator.cv_params[k] = v
+        return
+    
     def trainable_hyperparams(self, params, num_params=1, mode='random', keys=[]):
         """
         Docstring:

@@ -1,6 +1,7 @@
-import seaborn as sns; sns.set()
-from matplotlib import pyplot as plt
+"""
+Convenience class :: MetaWrapperClassifier()
 
+"""
 
 class MetaWrapperClassifier():
     """
@@ -26,8 +27,8 @@ class MetaWrapperClassifier():
     """
     def __init__(self, method='random', num_sample=3, estimators=None, base_estimator=None, exclude=None, verbose=0):                    
         
-        if method not in ['random', 'complete', 'chosen']:
-            raise ValueError("'method' should be either ['random', 'complete', 'chosen'].")        
+        if method not in ('random', 'complete', 'chosen'):
+            raise ValueError("'method' should be either ('random', 'complete', 'chosen').")        
         
         if method == 'chosen' and (estimators is None or len(estimators) == 0):
             suggestions = [name for name, _ in self.__build_classifier_repository()]
@@ -45,7 +46,7 @@ class MetaWrapperClassifier():
             self.clf = self.__build_classifier_list()           
         
         if self.verbose > 0:    
-            print("Initialized classifiers:")
+            print("Initialized classifiers by name:")
             for name, _ in self.clf:
                 print("\t%s" % name)          
         
@@ -81,7 +82,7 @@ class MetaWrapperClassifier():
 
     def add_algorithm(self, module_name, algorithm_name):
         from base import EnsembleBaseClassifier      
-        from importlib import reload, import_module                       
+        from importlib import import_module                       
         try:
             module = import_module(module_name)
         except:
@@ -157,7 +158,6 @@ class MetaWrapperClassifier():
         
         if self.verbose > 0:
             for name, met, loss in scores: print("log_loss: %.4f \t %s: %.4f \t %s" % (loss, metric, met, name))
-            ##for name, met in scores: print("%s: %.4f \t %s" % (metric, met, name))
         return scores
     
     def optimize_classifiers(self, X, y, n_iter=12, scoring='accuracy', cv=10, n_jobs=1, 
@@ -223,32 +223,53 @@ class MetaWrapperClassifier():
             try:
                 search.fit(X, y)
             except:
-                warnings.warn("Estimator '%s' failed (likey: 'n_iter' too high). \nAdding un-optimized version..." % name)
+                warnings.warn("Estimator '%s' failed (likely: 'n_iter' too high). \nAdding un-optimized version." % name)
                 optimized.append((name, estimator.fit(X,y)))
             else:
                 optimized.append((name, search.best_estimator_))
                 if isinstance(scoring, str):
-                    print("(Scoring='%s')\tBest mean score: %.4f (%s)" % (scoring, search.best_score_, name))
+                    print("(scoring='%s')\tBest mean score: %.4f (%s)" % (scoring, search.best_score_, name))
                 else:
                     print("Best mean score: %.4f (%s)" % (search.best_score_, name))  
                     
             print("Iteration time = %.2f min." % ((time.time()-start_time)/60.))            
-            
-                    
-        
         # Rewrite later: for now just return a list of optimized estimators
         # Perhaps we should return the grids themselves
         return optimized
 
+    def bayesian_optimization(self, X, y, n_iter=12, scoring='accuracy', cv=10, n_jobs=1):
+        """
+        Docstring:
+        Use package 'scikit-optimize' >=0.3 in order to do Bayesian optimization instead of random grid search.
+        Package URL: https://github.com/scikit-optimize/scikit-optimize/
+        
+        """
+        
+        raise NotImplementedError("Not yet implemented")
+        
+        try: 
+            import skopt
+        except ImportError:
+            raise ImportError("Package scikit-optimize not installed.")
+        else:
+            print("Successfully imported scikit-optimize.")
+        from skopt import BayesSearchCV
+        from skopt.space import Real, Categorical, Integer
+        from sklearn.model_selection import cross_val_score
+        
 
+        
+        
+        
+    
 class CheckClassifierCorrelation():
     """
     Check correlation between classifier predictions using e.g. Pearson's formula. Initially, a repository
-    of classifiers is constructed from either a random, complete, or chosen selection (set by the 'method' 
-    parameter). 
+    of classifiers is constructed from either a random, complete, or chosen selection (set by the 'method' parameter). 
+    
     """
     def __init__(self, prediction_type=None):
-        options = ['binaryclass', 'multiclass', 'regression']
+        options = ('binaryclass', 'multiclass', 'regression')
         if prediction_type not in options:
             raise ValueError("Valid options for prediction_type are: %s" % ", ".join(options))            
         self.prediction_type = prediction_type
@@ -268,6 +289,10 @@ class CheckClassifierCorrelation():
         return names, corr
         
     def plot_correlation_matrix(self, names, corr, rot=0, fig_size=(9,9), font_scale=1.0, file=''):
+        import seaborn as sns
+        sns.set()
+        from matplotlib import pyplot as plt
+        
         f = plt.figure(figsize=fig_size)
         sns.set(font_scale=font_scale)
         sns.heatmap(corr, annot=True, fmt=".2f", cmap="YlGnBu", xticklabels=names, yticklabels=names)

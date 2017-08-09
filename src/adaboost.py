@@ -69,14 +69,14 @@ class MetaAdaBoostClassifierAlgorithm(EnsembleBaseClassifier):
         
         if isinstance(self.base_estimator, type(DecisionTreeClassifier())):
             be = {'base_estimator__criterion': ['gini', 'entropy'],
-                  'base_estimator__max_depth': randint(3, 8), # Do not let it go too deep
+                  'base_estimator__max_depth': randint(1, 8), # Do not let it go too deep
                   'base_estimator__min_samples_leaf': randint(2, 20),
                   'base_estimator__max_features': [0.1, 'auto', 'log2'],
                   'base_estimator__class_weight': ['balanced', None]}
         
         # Tends to overfit: maybe use weak learners only, or perhaps skip parameter tuning entirely
         elif isinstance(self.base_estimator, type(LogisticRegression())): 
-            be = {'base_estimator__C': uniform(0, 150),
+            be = {'base_estimator__C': uniform(0, 1000),
                   'base_estimator__fit_intercept': [True, False],
                   'base_estimator__penalty': ['l1', 'l2']} 
         else:
