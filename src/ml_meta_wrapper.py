@@ -237,26 +237,53 @@ class MetaWrapperClassifier():
         # Perhaps we should return the grids themselves
         return optimized
 
-    def bayesian_optimization(self, X, y, n_iter=12, scoring='accuracy', cv=10, n_jobs=1):
+    def bayesian_optimization(self, X, y, n_iter=100, scoring='accuracy', greater_is_better=True, cv=10, n_jobs=1):
         """
         Docstring:
         Use package 'scikit-optimize' >=0.3 in order to do Bayesian optimization instead of random grid search.
         Package URL: https://github.com/scikit-optimize/scikit-optimize/
         
         """        
-        raise NotImplementedError("Not yet implemented")       
-        try: 
-            import skopt
-        except ImportError:
-            raise ImportError("Package scikit-optimize not installed.")
-            
-        from skopt import BayesSearchCV
+        import numpy as np
+        import warnings
+        from skopt import gp_minimize
+        from utils import skopt_space_mapping        
         from sklearn.model_selection import cross_val_score
-        from utils import skopt_space_mapping
 
         # Compute skopt spaces
         skopt_spaces = skopt_space_mapping([(nm, cl.cv_params) for nm, cl in self.clf])
         
+        for name, classifier in self.clf:
+            
+            # Define search space
+            space = [(nm, skopt_space) for nm, skopt_space in skopt_spaces if nm==name]
+            
+            # Make sure we got 1 match and then format it correctly
+            if not isinstance(space[0], tuple) and (len(space)==1):
+                raise ValueError("space object should have length 1. Got: %s" % str(space))
+            _, space = space[0]
+            param_names = [nm for nm, _ in space.items()]
+            space = [dimension for _, dimension in space.items()]
+
+            
+            # Define objective function (it will have access to externally defined variables in 
+            # the calling method namespace
+            def objective(params):
+                param_dict = {param_name:param for param_name, param in zip(param_names, params)}                
+                classifier.estimator.set_params(**param_dict) 
+                score = np.mean(cross_val_score(classifier.estimator, X, y, cv=10, scoring='accuracy', n_jobs=-1))
+                if greater_is_better:
+                    return -score
+                else:
+                    return score
+            
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore')
+                res_gp = gp_minimize(objective, space, n_calls=50, random_state=0)   
+            
+            print("Best score=%.4f (%s)" % (res_gp.fun, name))
+        
+        return
     
 class CheckClassifierCorrelation():
     """
