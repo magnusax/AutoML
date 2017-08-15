@@ -43,8 +43,11 @@ class MetaWrapperClassifier():
         if method == 'chosen':
             self.clf = [(name, c) for name, c in self.__build_classifier_repository() if name in estimators]
         else:
-            self.clf = self.__build_classifier_list()           
-        
+            self.clf = self.__build_classifier_list()    
+            
+        # Filter out algorithms that are present in the exlude list
+        self.clf = [(n, c) for n, c in self.clf if not c in self.exclude]
+               
         if self.verbose > 0:    
             print("Initialized classifiers by name:")
             for name, _ in self.clf:

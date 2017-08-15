@@ -12,14 +12,16 @@ class BaseClassifier():
     def adjust_params(self, parms):
         """ Adjust classifier parameter helper function """
         import warnings
-        import sys       
         if not isinstance(parms, dict):
-            raise ValueError("Expect 'dict'. Got '%s'" % type(parms))        
+            raise ValueError("Expect 'dict'. Got '%s'" % type(parms))
+        fail = 0    
         for k, v in parms.items():
             try: 
                 self.estimator.set_params(**{k:v})
             except: 
-                warnings.warn("warning: '%s' not set (%s)" % (k, sys.exc_info()[1]))
+                fail =+ 1
+        if fail > 0:
+            warnings.warn("warning: at least one parameter not set.")
         return 
     
     def freeze_cv_params(self, parms):
