@@ -15,9 +15,9 @@ class loguniform():
         
     def rvs(self, *args, **kwargs):
         if self._size == 1:
-            return np.power(self._base, np.random.uniform(np.log10(self._low), np.log10(self._high), self._size))[0]
+            return np.power(self._base, np.random.uniform(np.log10(self.a), np.log10(self.b), self._size))[0]
         else:
-            return np.power(self._base, np.random.uniform(np.log10(self._low), np.log10(self._high), self._size))
+            return np.power(self._base, np.random.uniform(np.log10(self.a), np.log10(self.b), self._size))
     
 
 if __name__ == '__main__':
