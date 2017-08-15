@@ -1,17 +1,15 @@
-import numpy as np
-from scipy.stats import randint, uniform
-
-from sklearn.linear_model import SGDClassifier
-
+from scipy.stats import uniform
+from search import loguniform
 from base import BaseClassifier
+from sklearn.linear_model import SGDClassifier
 
 
 class MetaSGDClassifierAlgorithm(BaseClassifier):
 
     # Use the defaults from scikit-learn package
-    def __init__(self, loss='hinge', penalty='l2', alpha=0.0001, l1_ratio=0.15, fit_intercept=True, max_iter=None, learning_rate='optimal', random_state=None):
+    def __init__(self, loss='log', penalty='l2', alpha=0.0001, l1_ratio=0.15, fit_intercept=True, max_iter=None, learning_rate='optimal', random_state=None):
         
-        self.name = "sgd_clf"
+        self.name = "sgd_logreg"
         self.max_n_iter = 1000
         
         self.init_params = {}
@@ -53,12 +51,24 @@ class MetaSGDClassifierAlgorithm(BaseClassifier):
         
         """
         # Trainable params available in self.cv_params().keys()
-        return { 'penalty': ['l1', 'l2', 'elasticnet'],
-                 'alpha':  
-                 'fit_intercept': [True, False],
-                 'class_weight': ['balanced', None],
-                 'max_iter': [50, 100, 200] }
-                                  
+        return [
+             {'penalty': ['l1', 'l2'],
+              'alpha': loguniform(low=1e-7, high=1e+7), 
+              'fit_intercept': [True, False],
+              'class_weight': ['balanced', None],
+              'max_iter': [5, 10, 25, 50, 100],
+              'learning_rate': ['optimal', 1e-1, 1e-2, 1e-3] },
+             
+             {'penalty': ['elasticnet'],
+              'l1_ratio': uniform(0, 1),
+              'alpha': loguniform(low=1e-7, high=1e+7), 
+              'fit_intercept': [True, False],
+              'class_weight': ['balanced', None],
+              'max_iter': [5, 10, 25, 50, 100],
+              'learning_rate': ['optimal', 1e-1, 1e-2, 1e-3] }  
+             ]
+
+    
 if __name__ == '__main__':
     import sys
     sys.exit(-1)
