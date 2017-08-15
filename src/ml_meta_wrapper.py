@@ -78,10 +78,8 @@ class MetaWrapperClassifier():
             ('naive_bayes', 'MetaMultinomialNBayesClassifierAlgorithm'),
             ('naive_bayes', 'MetaBernoulliNBayesClassifierAlgorithm'),
         ]
-        if self.exclude is None:
-            return [self.add_algorithm(m, c) for m, c in algorithms]
-        else:
-            return [self.add_algorithm(m, c) for m, c in algorithms if not m in self.exclude]
+        
+        return [self.add_algorithm(m, c) for m, c in algorithms]
 
     def add_algorithm(self, module_name, algorithm_name):
         from base import EnsembleBaseClassifier      
