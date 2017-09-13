@@ -10,7 +10,7 @@ class MetaSGDClassifierAlgorithm(BaseClassifier):
     # Use the defaults from scikit-learn package
     def __init__(self, loss='log', penalty='l2', alpha=0.0001, l1_ratio=0.15, fit_intercept=True, n_iter=5, learning_rate='optimal', random_state=None):
         
-        self.name = "sgd_logreg"
+        self.name = "SGD"
         self.max_n_iter = 1000
         
         self.init_params = {}

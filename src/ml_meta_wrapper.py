@@ -47,9 +47,7 @@ class MetaWrapperClassifier():
         self.clf = [(n, c) for n, c in self.clf if not (n in self.exclude)]
                
         if self.verbose > 0:    
-            print("Initialized classifiers by name:")
-            for name, _ in self.clf:
-                print("\t%s" % name)          
+            print("Initialized classifiers: %s" % ", ".join([name for name, _ in self.clf]))         
         
     def __build_classifier_list(self):
         clfs = self.__build_classifier_repository()
@@ -72,7 +70,7 @@ class MetaWrapperClassifier():
             ('adaboost', 'MetaAdaBoostClassifierAlgorithm'), 
             ('nearest_neighbors', 'MetaKNearestNeighborClassifierAlgorithm'), 
             ('logistic_regression', 'MetaLogisticRegressionClassifierAlgorithm'),
-            ('logistic_regression_sgd', 'MetaSGDClassifierAlgorithm'),
+            ('stochastic_gradient_descent', 'MetaSGDClassifierAlgorithm'),
             ('naive_bayes', 'MetaGaussianNBayesClassifierAlgorithm'),
             ('naive_bayes', 'MetaMultinomialNBayesClassifierAlgorithm'),
             ('naive_bayes', 'MetaBernoulliNBayesClassifierAlgorithm'),
