@@ -40,7 +40,7 @@ class MetaGaussianNBayesClassifierAlgorithm(BaseClassifier):
         
     def _set_cv_params(self):
         """ Dictionary containing all trainable parameters """
-        return {}
+        return [{}]
 
         
 class MetaMultinomialNBayesClassifierAlgorithm(BaseClassifier):
@@ -91,8 +91,8 @@ class MetaMultinomialNBayesClassifierAlgorithm(BaseClassifier):
     def _set_cv_params(self):
         """ Dictionary containing all trainable parameters """
         from scipy.stats import uniform as sp_uniform        
-        return {'alpha': sp_uniform(0, 1),
-                'fit_prior': [True, False] }    
+        return [{'alpha': sp_uniform(0, 1),
+                 'fit_prior': [True, False] }]    
 
 
 class MetaBernoulliNBayesClassifierAlgorithm(BaseClassifier):
@@ -139,8 +139,8 @@ class MetaBernoulliNBayesClassifierAlgorithm(BaseClassifier):
     def _set_cv_params(self):
         """ Dictionary containing all trainable parameters """
         from scipy.stats import uniform as sp_uniform        
-        return {'alpha': sp_uniform(0, 1),  
-                'fit_prior': [True, False] }    
+        return [{'alpha': sp_uniform(0, 1),  
+                 'fit_prior': [True, False] }]
 
 
 if __name__ == '__main__':

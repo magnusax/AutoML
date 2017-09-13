@@ -25,7 +25,7 @@ class MetaWrapperClassifier():
     List of classifiers 
        
     """
-    def __init__(self, method='random', num_sample=3, estimators=None, base_estimator=None, exclude=None, verbose=0):                    
+    def __init__(self, method='random', num_sample=3, estimators=None, base_estimator=None, exclude=[], verbose=0):                    
         
         if method not in ('random', 'complete', 'chosen'):
             raise ValueError("'method' should be either ('random', 'complete', 'chosen').")        
@@ -44,9 +44,7 @@ class MetaWrapperClassifier():
             self.clf = [(name, c) for name, c in self.__build_classifier_repository() if name in estimators]
         else:
             self.clf = self.__build_classifier_list()    
-            
-        # Filter out algorithms that are present in the exlude list
-        self.clf = [(n, c) for n, c in self.clf if not c in self.exclude]
+        self.clf = [(n, c) for n, c in self.clf if not (n in self.exclude)]
                
         if self.verbose > 0:    
             print("Initialized classifiers by name:")
@@ -74,12 +72,13 @@ class MetaWrapperClassifier():
             ('adaboost', 'MetaAdaBoostClassifierAlgorithm'), 
             ('nearest_neighbors', 'MetaKNearestNeighborClassifierAlgorithm'), 
             ('logistic_regression', 'MetaLogisticRegressionClassifierAlgorithm'),
+            ('logistic_regression_sgd', 'MetaSGDClassifierAlgorithm'),
             ('naive_bayes', 'MetaGaussianNBayesClassifierAlgorithm'),
             ('naive_bayes', 'MetaMultinomialNBayesClassifierAlgorithm'),
             ('naive_bayes', 'MetaBernoulliNBayesClassifierAlgorithm'),
         ]
         
-        return [self.add_algorithm(m, c) for m, c in algorithms]
+        return [ self.add_algorithm(m, c) for m, c in algorithms ]
 
     def add_algorithm(self, module_name, algorithm_name):
         from base import EnsembleBaseClassifier      
@@ -101,7 +100,8 @@ class MetaWrapperClassifier():
         for name, clf in self.clf:
             try:
                 clf.estimator.set_params(**{'n_jobs': n_jobs})
-            except: 
+            except:
+                # Should ideally give user a warning
                 pass
             st = time.time()
             clf.estimator.fit(X, y)
@@ -190,53 +190,35 @@ class MetaWrapperClassifier():
         List containing (classifier name, most optimized classifier) tuples
         
         """
-        import sys
         import time
-        import warnings
         from sklearn.model_selection import RandomizedSearchCV
         
-        optimized = []
-        
-        for name, classifier in self.clf:            
-            estimator, param_dist = classifier.estimator, classifier.cv_params            
-            
+        def _random_grid_search(p_index, clf, clf_name, param_dict):
+            clf_name = clf_name + "_pd%i" % (p_index+1) if p_index > 0 else clf_name
+
             if sample_hyperparams and not get_hyperparams:
-                # Here we (by default, but other behaviors are also possible) sample randomly
-                # [1, number hyperparams] to optimize in the cross-validation loop
-                num_params = np.random.randint(min_hyperparams, len(param_dist))
-                param_dist = classifier.sample_hyperparams(classifier.cv_params, num_params=num_params, mode='random', keys=[])
-            
+                num_params = np.random.randint(min_hyperparams, len(param_dict))
+                param_dist = clf.sample_hyperparams(param_dict, num_params = num_params, mode = 'random')
+
             if get_hyperparams and not sample_hyperparams:
-                if len(classifier.cv_params_to_tune) > 0:
-                    print("(%s): overriding current parameter dictionary using 'cv_params_to_tune'" % name)
-                    param_dist = classifier.sample_hyperparams(classifier.cv_params, num_params=-1, mode='select', keys=classifier.cv_params_to_tune)            
-            
-            n_iter_ = min(n_iter, classifier.max_n_iter)
-            
-            if self.verbose>0:
-                print("Starting grid search for '%s'" % name)
-                print("Setting 'n_iter' to:",n_iter_)
-            
-            search = RandomizedSearchCV(estimator, param_distributions=param_dist, n_iter=n_iter_, 
-                                        scoring=scoring, cv=cv, n_jobs=n_jobs, verbose=self.verbose, 
-                                        error_score=0, return_train_score=True, random_state=random_state)
+                if len(clf.cv_params_to_tune)>0:                    
+                    param_dist = clf.sample_hyperparams(param_dict, keys = clf.cv_params_to_tune, mode = 'select')            
+
+            n_iter_ = min(n_iter, clf.max_n_iter)        
+            random_search = RandomizedSearchCV(clf.estimator, param_distributions=param_dict, n_iter=n_iter_, scoring=scoring, cv=cv, n_jobs=n_jobs, 
+                                               verbose=self.verbose, error_score=0, return_train_score=True, random_state=random_state)
             start_time = time.time()
             try:
-                search.fit(X, y)
+                random_search.fit(X, y)
             except:
-                warnings.warn("Estimator '%s' failed (likely: 'n_iter' too high). \nAdding un-optimized version." % name)
-                optimized.append((name, estimator.fit(X,y)))
+                return (clf_name, clf.estimator.fit(X,y))
             else:
-                optimized.append((name, search.best_estimator_))
-                if isinstance(scoring, str):
-                    print("(scoring='%s')\tBest mean score: %.4f (%s)" % (scoring, search.best_score_, name))
-                else:
-                    print("Best mean score: %.4f (%s)" % (search.best_score_, name))  
-                    
-            print("Iteration time = %.2f min." % ((time.time()-start_time)/60.))            
-        # Rewrite later: for now just return a list of optimized estimators
-        # Perhaps we should return the grids themselves
-        return optimized
+                return (clf_name, random_search.best_estimator_)            
+            finally:
+                if self.verbose > 0:
+                    print("Search time = %.2f min." % ((time.time()-start_time)/60.))
+
+        return [_random_grid_search(idx, clf, name, param_dict) for name, clf in self.clf for idx, param_dict in enumerate(clf.cv_params)]
 
     def bayesian_optimization(self, X, y, n_iter=100, scoring='accuracy', greater_is_better=True, cv=10, n_jobs=1):
         """

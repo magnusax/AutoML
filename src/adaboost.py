@@ -85,7 +85,7 @@ class MetaAdaBoostClassifierAlgorithm(EnsembleBaseClassifier):
         # This procedure is consistent and likely "version proof".
         d = ad.copy()
         d.update(be) # Mutates 'd' so it returns None
-        return d
+        return [d]
         
         
 # Do not allow calls to this module from the command line

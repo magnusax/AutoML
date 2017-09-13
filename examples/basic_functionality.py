@@ -1,9 +1,13 @@
+import os
+import sys
+sys.path.append("../src/")
+
 import numpy as np
 
 # ML-meta-wrapper project
-import ../src/utils
-import ../src/ml_meta_wrapper
-from ../src/visualize import Visualizer as viz
+import utils
+import ml_meta_wrapper as metawrapper
+from visualize import Visualizer as viz
 
 from sklearn.metrics import accuracy_score, log_loss
 
@@ -34,10 +38,10 @@ def main():
     print('multiclass classification? Answer: ', multiclass)
     
     # Get probabilities (handy when attempting to do ensembling later on)
-    train_probas = clfs.predict_proba_classifiers(X_test)
+    train_probas = clfs.predict_classifiers(X_train)
     
     # Get log loss when doing probabilities (e.g. metric='accuracy' will not work)
-    train_scores = clfs.classifier_performance(train_probas, y_test, metric='log_loss', multiclass=True)    
+    train_scores = clfs.classifier_performance(train_probas, y_train, metric='accuracy', multiclass=True)    
         
     # Evaulate performance in terms of accuracy this time
     print("Training scores:")
@@ -51,10 +55,10 @@ def main():
     print("Cross validation with randomly drawn parameter realizations:")
     clfs.verbose = 1
     optims = clfs.optimize_classifiers(X_train, y_train, n_iter=10, n_jobs=-1, random_state=1)
-    for name, optimized_clf in optims: # Classifiers are already fitted (re-training redundant)
+    for name, clf in optims: # Classifiers are already fitted (re-training redundant)
         print(name, 
-              'train score:', accuracy_score(optimized_clf.predict(X_train), y_train), 
-              'test score:',  accuracy_score(optimized_clf.predict(X_test), y_test)
+              'train score:', accuracy_score(clf.predict(X_train), y_train), 
+              'test score:',  accuracy_score(clf.predict(X_test), y_test)
         )
     
     # This method expects a list of 2-tuples and can either return a matplotlib.pyplot.figure object, or 

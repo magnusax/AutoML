@@ -56,12 +56,12 @@ class MetaKNearestNeighborClassifierAlgorithm(BaseClassifier):
         Dictionary containing all trainable parameters
        (Consider making it public)        
         """
-        return { 'n_neighbors': randint(2, 100),
-                 'weights': ['uniform', 'distance'],
-                 'algorithm': ['auto', 'ball_tree', 'kd_tree', 'brute'],
-                 'leaf_size': [15, 30, 45], # see: http://scikit-learn.org/stable/modules/neighbors.html#neighbors (1.6.4.5. Effect of leaf_size)
-                 'p': [1,2,3],
-                 'metric': ['minkowski']}
+        return [{ 'n_neighbors': randint(2, 100),
+                  'weights': ['uniform', 'distance'],
+                  'algorithm': ['auto', 'ball_tree', 'kd_tree', 'brute'],
+                  'leaf_size': [15, 30, 45], # see: http://scikit-learn.org/stable/modules/neighbors.html#neighbors (1.6.4.5. Effect of leaf_size)
+                  'p': [1,2,3],
+                  'metric': ['minkowski'] }]
                            
 if __name__ == '__main__':
     import sys

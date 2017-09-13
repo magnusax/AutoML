@@ -1,3 +1,4 @@
+import sys
 from scipy.stats import uniform
 from search import loguniform
 from base import BaseClassifier
@@ -7,7 +8,7 @@ from sklearn.linear_model import SGDClassifier
 class MetaSGDClassifierAlgorithm(BaseClassifier):
 
     # Use the defaults from scikit-learn package
-    def __init__(self, loss='log', penalty='l2', alpha=0.0001, l1_ratio=0.15, fit_intercept=True, max_iter=None, learning_rate='optimal', random_state=None):
+    def __init__(self, loss='log', penalty='l2', alpha=0.0001, l1_ratio=0.15, fit_intercept=True, n_iter=5, learning_rate='optimal', random_state=None):
         
         self.name = "sgd_logreg"
         self.max_n_iter = 1000
@@ -18,7 +19,7 @@ class MetaSGDClassifierAlgorithm(BaseClassifier):
         self.init_params['alpha'] = alpha
         self.init_params['l1_ratio'] = l1_ratio
         self.init_params['fit_intercept'] = fit_intercept
-        self.init_params['max_iter'] = max_iter
+        self.init_params['n_iter'] = n_iter
         self.init_params['learning_rate'] = learning_rate
         self.init_params['random_state'] = random_state
         
@@ -39,7 +40,7 @@ class MetaSGDClassifierAlgorithm(BaseClassifier):
                 'does_regression': False, 
                 'predict_probas': hasattr(self.estimator, 'predict_proba')}
     
-    def adjust_param(self, d):
+    def adjust_params(self, d):
          return super().adjust_params(d)
     
     def sample_hyperparams(self, params, num_params, mode, keys):
@@ -50,13 +51,13 @@ class MetaSGDClassifierAlgorithm(BaseClassifier):
         Dictionary containing all trainable parameters
         
         """
-        # Trainable params available in self.cv_params().keys()
+        # Trainable params available in self.cv_params[i].keys() for i in len(self.cv_params)
         return [
              {'penalty': ['l1', 'l2'],
               'alpha': loguniform(low=1e-7, high=1e+7), 
               'fit_intercept': [True, False],
               'class_weight': ['balanced', None],
-              'max_iter': [5, 10, 25, 50, 100],
+              'n_iter': [5, 10, 25, 50, 100],
               'learning_rate': ['optimal', 1e-1, 1e-2, 1e-3] },
              
              {'penalty': ['elasticnet'],
@@ -64,11 +65,10 @@ class MetaSGDClassifierAlgorithm(BaseClassifier):
               'alpha': loguniform(low=1e-7, high=1e+7), 
               'fit_intercept': [True, False],
               'class_weight': ['balanced', None],
-              'max_iter': [5, 10, 25, 50, 100],
+              'n_iter': [5, 10, 25, 50, 100],
               'learning_rate': ['optimal', 1e-1, 1e-2, 1e-3] }  
              ]
 
     
 if __name__ == '__main__':
-    import sys
     sys.exit(-1)
