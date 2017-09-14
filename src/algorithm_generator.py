@@ -1,5 +1,6 @@
 import sys
 import numpy as np
+import warnings
 from copy import deepcopy
 from ml_meta_wrapper import MetaWrapperClassifier
 
@@ -13,7 +14,10 @@ def _generate(estimator_name, estimator_params):
         if len(clfs)==1:
             _, clf = clfs[0]
         else:
-            raise ValueError("Should only have 1 algorithm")    
+            raise ValueError("Should only have 1 algorithm")
+    else:
+        raise TypeError("Expecting string input. Found: %s" % str(estimator_name))
+        
     estimators_to_fit = []
     values = _gen_numeric_values(estimator_params['low'], 
                                  estimator_params['high'], 
@@ -24,7 +28,8 @@ def _generate(estimator_name, estimator_params):
         try:
             estimator.set_params(**{param:value})
         except:
-            sys.exit("Failed to set param '%s'" % param)
+            warnings.warn("Failed to set param '%s'" % param)
+            continue
         estimators_to_fit.append(estimator)
         del estimator        
     return estimators_to_fit

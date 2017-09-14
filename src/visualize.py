@@ -40,8 +40,10 @@ class Visualizer():
         sns.barplot(x='performance', y='classifier', data=data)
         plt.xlabel('performance')
         if len(file)>1: 
-            try: plt.savefig(file)
-            except: pass
+            try: 
+                plt.savefig(file)
+            except: 
+                pass
         return f
 
 

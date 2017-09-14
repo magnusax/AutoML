@@ -1,6 +1,6 @@
 import sys
 from scipy.stats import uniform
-from search import loguniform
+from sampling import loguniform
 from base import BaseClassifier
 from sklearn.linear_model import SGDClassifier
 

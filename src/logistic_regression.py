@@ -1,7 +1,7 @@
 import numpy as np
 from math import pow
 from scipy.stats import randint, uniform
-from search import loguniform
+from sampling import loguniform
 from sklearn.linear_model import LogisticRegression
 from base import BaseClassifier
 
