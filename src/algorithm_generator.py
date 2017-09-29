@@ -21,8 +21,7 @@ def _generate(estimator_name, estimator_params):
     for estimator_param in estimator_params:
         param = estimator_param['param']
         premise = estimator_param['premise']
-        values = _gen_numeric_values(estimator_param['low'], estimator_param['high'], 
-                                     estimator_param['numval'])
+        values = _gen_numeric_values(estimator_param['grid'])        
         for value in values:
             estimator = deepcopy(clf.estimator)
             pars = {param:value}; pars.update(premise)
