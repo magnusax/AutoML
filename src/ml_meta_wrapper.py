@@ -1,42 +1,42 @@
-"""
-Convenience class :: MetaWrapperClassifier()
+import numpy as np
+import warnings
+import time
+import sys
+from base import EnsembleBaseClassifier      
+from importlib import import_module  
+from operator import itemgetter
+from numpy import random
 
-"""
 
 class MetaWrapperClassifier():
     """
-    Docstring:
-    
-    Class that keeps track of available classifiers and implements functionality around them
-    
+    Docstring:    
+    Class that keeps track of available classifiers and implements functionality around them    
     Input:
     ------------------
        method = str: ('random' : Choose num_sample random classifiers (default),
                       'complete' : Choose all available classifiers,
-                      'chosen' : Send in a list (iterable will work) of classifier names and initialize)
-                      
+                      'chosen' : Send in a list (iterable will work) of classifier names and initialize)                      
        num_sample: (int: 3) choose number of classifiers to sample. Used when method == 'random'
        estimators: (None or list/list-like: None): Send a list of classifiers to initialize. Used when method == 'chosen'
        base_estimator: (None or sklearn-type estimator: None) decide which classifier to use as a weak learner for ensemble methods
-       verbose: (int, 0) if > 0 then be 'chatty'
-       
+       verbose: (int, 0) if > 0 then be 'chatty'       
     Output:
     ------------------
     List of classifiers 
-       
     """
     def __init__(self, method='random', num_sample=3, estimators=None, base_estimator=None, exclude=[], verbose=0):                    
         
         if method not in ('random', 'complete', 'chosen'):
-            raise ValueError("'method' should be either ('random', 'complete', 'chosen').")        
-        
+            raise ValueError("'method' should be either ('random', 'complete', 'chosen').")                
         if method == 'chosen' and (estimators is None or len(estimators) == 0):
             suggestions = [name for name, _ in self.__build_classifier_repository()]
-            raise ValueError("Specify name of at least one (1) classifier in list (iterable) 'clf'. \nValid options: %s" % suggestions)        
-        
+            raise ValueError("Specify name of at least one (1) classifier in list (iterable) 'clf'. \nValid options: %s" % suggestions)
+            
         self.verbose = verbose   
         self.method = method
         self.num_sample = num_sample
+        # This estimator is used as 'base_estimtor' in ensembling algorithms
         self.base_estimator = base_estimator
         self.exclude = exclude
         
@@ -44,27 +44,25 @@ class MetaWrapperClassifier():
             self.clf = [(name, c) for name, c in self.__build_classifier_repository() if name in estimators]
         else:
             self.clf = self.__build_classifier_list()    
-        self.clf = [(n, c) for n, c in self.clf if not (n in self.exclude)]
-               
+        self.clf = [(n, c) for n, c in self.clf if not (n in self.exclude)]               
+        
         if self.verbose > 0:    
-            print("Initialized classifiers: %s" % ", ".join([name for name, _ in self.clf]))         
-        
+            print("Initialized classifiers: %s" % ", ".join(self.get_names()))         
+    
+    def get_names(self):
+        return [name for name, _ in self.clf]
+    
     def __build_classifier_list(self):
-        clfs = self.__build_classifier_repository()
-        
+        clfs = self.__build_classifier_repository()        
         if self.method == 'random':
             print("Sampling %i algorithms..." % self.num_sample)
-            from numpy import random
-            clfs = [clfs[i] for i in random.choice(len(clfs), self.num_sample, replace=False)]
-        
+            clfs = [clfs[i] for i in random.choice(len(clfs), self.num_sample, replace=False)]        
         return clfs
         
     def __build_classifier_repository(self):
         """
-        Return list of (classifier_name, classifier) tuples
-        
+        Return list of (classifier_name, classifier) tuples        
         """        
-        # This list of tuples contains all importable algorithms
         # TODO: move this to a separate module containing algorithms only
         algorithms = [
             ('adaboost', 'MetaAdaBoostClassifierAlgorithm'), 
@@ -74,13 +72,10 @@ class MetaWrapperClassifier():
             ('naive_bayes', 'MetaGaussianNBayesClassifierAlgorithm'),
             ('naive_bayes', 'MetaMultinomialNBayesClassifierAlgorithm'),
             ('naive_bayes', 'MetaBernoulliNBayesClassifierAlgorithm'),
-        ]
-        
-        return [ self.add_algorithm(m, c) for m, c in algorithms ]
+        ]        
+        return [self._add_algorithm(m, c) for m, c in algorithms]
 
-    def add_algorithm(self, module_name, algorithm_name):
-        from base import EnsembleBaseClassifier      
-        from importlib import import_module                       
+    def _add_algorithm(self, module_name, algorithm_name):                     
         try:
             module = import_module(module_name)
         except:
@@ -94,13 +89,8 @@ class MetaWrapperClassifier():
         return instance.name, instance
     
     def fit_classifiers(self, X, y, n_jobs=1):
-        import time
         for name, clf in self.clf:
-            try:
-                clf.estimator.set_params(**{'n_jobs': n_jobs})
-            except:
-                # Should ideally give user a warning
-                pass
+            clf.estimator.set_params(**{'n_jobs': n_jobs})
             st = time.time()
             clf.estimator.fit(X, y)
             if self.verbose > 0:
@@ -121,11 +111,8 @@ class MetaWrapperClassifier():
     
     def classifier_performance(self, preds, y_true, metric='accuracy', multiclass=False, **kwargs):
         """
-        **kwargs gives us the possibility to send extra parameters when computing various metrics
-        
+        **kwargs gives us the possibility to send extra parameters when computing various metrics        
         """
-        import numpy as np
-        from operator import itemgetter
         from sklearn.metrics import accuracy_score, roc_auc_score, f1_score, recall_score, precision_score, log_loss
         
         # List of supported metric names and the corresponding method (tuples)
@@ -151,8 +138,7 @@ class MetaWrapperClassifier():
             else:
                 yhat = np.array(y_pred)
             loss = log_loss(y_true, yhat)            
-            scores.append((name, val, loss))
-                        
+            scores.append((name, val, loss))                        
         scores.sort(key=itemgetter(1), reverse=True)
         
         if self.verbose > 0:
@@ -162,8 +148,7 @@ class MetaWrapperClassifier():
     def optimize_classifiers(self, X, y, n_iter=12, scoring='accuracy', cv=10, n_jobs=1, 
                              sample_hyperparams=False, min_hyperparams=2, get_hyperparams=False, random_state=None):
         """
-        Docstring:
-        
+        Docstring:        
         This method is a wrapper to cross validation using RandomizedSearchCV from scikit-learn, wherein we optimize each defined algorithm
         Default behavior is to optimize all parameters available to each algorithm, but it is possible to sample (randomly) a subset of them
         to optimize (sample_hyperparams=True), or to choose a set of parameters (get_hyperparams=True).
@@ -185,10 +170,8 @@ class MetaWrapperClassifier():
         
         Ouput:
         ------------------
-        List containing (classifier name, most optimized classifier) tuples
-        
+        List containing (classifier name, most optimized classifier) tuples       
         """
-        import time
         from sklearn.model_selection import RandomizedSearchCV
         
         def _random_grid_search(p_index, clf, clf_name, param_dict):
@@ -222,30 +205,21 @@ class MetaWrapperClassifier():
         """
         Docstring:
         Use package 'scikit-optimize' >=0.3 in order to do Bayesian optimization instead of random grid search.
-        Package URL: https://github.com/scikit-optimize/scikit-optimize/
-        
+        Package URL: https://github.com/scikit-optimize/scikit-optimize/        
         """        
-        import numpy as np
-        import warnings
         from skopt import gp_minimize
         from utils import skopt_space_mapping        
         from sklearn.model_selection import cross_val_score
-
-        # Compute skopt spaces
-        skopt_spaces = skopt_space_mapping([(nm, cl.cv_params) for nm, cl in self.clf])
         
-        for name, classifier in self.clf:
-            
+        skopt_spaces = skopt_space_mapping([(nm, cl.cv_params) for nm, cl in self.clf])        
+        for name, classifier in self.clf:            
             # Define search space
-            space = [(nm, skopt_space) for nm, skopt_space in skopt_spaces if nm==name]
-            
-            # Make sure we got 1 match and then format it correctly
+            space = [(nm, skopt_space) for nm, skopt_space in skopt_spaces if nm==name]            
             if not isinstance(space[0], tuple) and (len(space)==1):
-                raise ValueError("space object should have length 1. Got: %s" % str(space))
+                raise ValueError("space object should have 1 element. Got: %s" % str(space))
             _, space = space[0]
             param_names = [nm for nm, _ in space.items()]
             space = [dimension for _, dimension in space.items()]
-
             
             # Define objective function (it will have access to externally defined variables in 
             # the calling method namespace
@@ -257,13 +231,11 @@ class MetaWrapperClassifier():
                     return -score
                 else:
                     return score
-            
+                
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore')
-                res_gp = gp_minimize(objective, space, n_calls=50, random_state=0)   
-            
-            print("Best score=%.4f (%s)" % (res_gp.fun, name))
-        
+                res_gp = gp_minimize(objective, space, n_calls=50, random_state=0)               
+            print("Best score=%.4f (%s)" % (res_gp.fun, name))        
         return
     
 class CheckClassifierCorrelation():
@@ -311,5 +283,4 @@ class CheckClassifierCorrelation():
         return f
         
 if __name__ == '__main__':
-    import sys
     sys.exit(-1)     
