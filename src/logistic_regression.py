@@ -1,5 +1,5 @@
+import sys
 import numpy as np
-from math import pow
 from scipy.stats import randint, uniform
 from sampling import loguniform
 from sklearn.linear_model import LogisticRegression
@@ -57,18 +57,8 @@ class MetaLogisticRegressionClassifierAlgorithm(BaseClassifier):
     
     def _set_cv_params(self):
         """
-        Dictionary containing all trainable parameters
-        
+        Dictionary containing all trainable parameters      
         """
-        # Prefer to keep method private
-        #def stochastic_C(num_samples): 
-        #    """ 
-        #    Return randomly sampled floats in [10^-7, 10^7]
-        #    Check if there are methods in scipy.stats which can replace this method
-        #    If you want deterministic output, then set np.random.seed          
-        #    """
-        #    return np.random.choice([pow(10, float(f)) for f in np.linspace(-7, 7, 10000)], num_samples)
-        
         # Trainable params available in self.cv_params().keys()
         return [{ 'penalty': ['l1','l2'],
                   'C': loguniform(low=1e-7, high=1e+7),
@@ -77,5 +67,4 @@ class MetaLogisticRegressionClassifierAlgorithm(BaseClassifier):
                   'max_iter': [50, 100, 200] }]
                                   
 if __name__ == '__main__':
-    import sys
     sys.exit(-1)

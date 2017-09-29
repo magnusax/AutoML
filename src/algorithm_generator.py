@@ -16,22 +16,23 @@ def _generate(estimator_name, estimator_params):
         else:
             raise ValueError("Should only have 1 algorithm")
     else:
-        raise TypeError("Expecting string input. Found: %s" % str(estimator_name))
-        
+        raise TypeError("Expecting string input. Found: %s" % str(estimator_name))        
     estimators_to_fit = []
-    values = _gen_numeric_values(estimator_params['low'], 
-                                 estimator_params['high'], 
-                                 estimator_params['numval']) 
-    param = estimator_params['param']
-    for value in values:
-        estimator = deepcopy(clf.estimator)
-        try:
-            estimator.set_params(**{param:value})
-        except:
-            warnings.warn("Failed to set param '%s'" % param)
-            continue
-        estimators_to_fit.append(estimator)
-        del estimator        
+    for estimator_param in estimator_params:
+        param = estimator_param['param']
+        premise = estimator_param['premise']
+        values = _gen_numeric_values(estimator_param['low'], estimator_param['high'], 
+                                     estimator_param['numval'])
+        for value in values:
+            estimator = deepcopy(clf.estimator)
+            pars = {param:value}; pars.update(premise)
+            try:
+                estimator.set_params(**pars)
+            except:
+                warnings.warn("Failed to set param '%s'" % param)
+                continue
+            estimators_to_fit.append(estimator)
+            del estimator                    
     return estimators_to_fit
 
 def generate_fit(estimator_name, estimator_params, X, y):
