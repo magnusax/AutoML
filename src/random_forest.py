@@ -6,8 +6,8 @@ from scipy.stats import randint
 class MetaRandomForestClassifierAlgorithm(BaseClassifier):
     """
     Implementation of random forest classifier:
-    http://scikit-learn.org/0.17/modules/generated/sklearn.ensemble.RandomForestClassifier.html#sklearn.ensemble.RandomForestClassifier
-    
+    http://scikit-learn.org/0.17/modules/generated/sklearn.ensemble.\
+                RandomForestClassifier.html#sklearn.ensemble.RandomForestClassifier
     """
     
     def __init__(self, n_estimators=10, criterion='gini', max_depth=None, min_samples_split=2, min_samples_leaf=1, 
