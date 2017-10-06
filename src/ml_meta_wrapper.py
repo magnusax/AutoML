@@ -72,6 +72,7 @@ class MetaWrapperClassifier():
             ('naive_bayes', 'MetaGaussianNBayesClassifierAlgorithm'),
             ('naive_bayes', 'MetaMultinomialNBayesClassifierAlgorithm'),
             ('naive_bayes', 'MetaBernoulliNBayesClassifierAlgorithm'),
+            ('random_forest', 'MetaRandomForestClassifierAlgorithm'),
         ]        
         return [self._add_algorithm(m, c) for m, c in algorithms]
 
@@ -79,7 +80,7 @@ class MetaWrapperClassifier():
         try:
             module = import_module(module_name)
         except:
-            raise ValueError("Could not import module '%s'" % module_name)                
+            raise ValueError("Could not import module '%s' (%s)" % (module_name, sys.exc_info()[1]))
         algorithm = getattr(module, algorithm_name)
 
         if issubclass(algorithm, EnsembleBaseClassifier):
@@ -90,7 +91,10 @@ class MetaWrapperClassifier():
     
     def fit_classifiers(self, X, y, n_jobs=1):
         for name, clf in self.clf:
-            clf.estimator.set_params(**{'n_jobs': n_jobs})
+            try:
+                clf.estimator.set_params(**{'n_jobs': n_jobs})
+            except:
+                pass
             st = time.time()
             clf.estimator.fit(X, y)
             if self.verbose > 0:
@@ -280,7 +284,4 @@ class CheckClassifierCorrelation():
                 plt.savefig(file)
             except: 
                 print("Could not save figure to %s." % file)
-        return f
-        
-if __name__ == '__main__':
-    sys.exit(-1)     
+        return f  

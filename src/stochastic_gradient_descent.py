@@ -10,7 +10,7 @@ class MetaSGDClassifierAlgorithm(BaseClassifier):
     # Use the defaults from scikit-learn package
     def __init__(self, loss='log', penalty='l2', alpha=0.0001, l1_ratio=0.15, fit_intercept=True, n_iter=5, learning_rate='optimal', random_state=None):
         
-        self.name = "SGD"
+        self.name = "sgd_%s_loss" % str(loss)
         self.max_n_iter = 1000
         
         self.init_params = {}
@@ -58,7 +58,7 @@ class MetaSGDClassifierAlgorithm(BaseClassifier):
               'fit_intercept': [True, False],
               'class_weight': ['balanced', None],
               'n_iter': [5, 10, 25, 50, 100],
-              'learning_rate': ['optimal', 1e-1, 1e-2, 1e-3] },
+              'learning_rate': ['optimal', 1e-1, 1e-2] },
              
              {'penalty': ['elasticnet'],
               'l1_ratio': uniform(0, 1),
@@ -66,7 +66,7 @@ class MetaSGDClassifierAlgorithm(BaseClassifier):
               'fit_intercept': [True, False],
               'class_weight': ['balanced', None],
               'n_iter': [5, 10, 25, 50, 100],
-              'learning_rate': ['optimal', 1e-1, 1e-2, 1e-3] }  
+              'learning_rate': ['optimal', 1e-1, 1e-2] }  
              ]
 
     

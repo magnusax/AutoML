@@ -86,9 +86,3 @@ class MetaAdaBoostClassifierAlgorithm(EnsembleBaseClassifier):
         d = ad.copy()
         d.update(be) # Mutates 'd' so it returns None
         return [d]
-        
-        
-# Do not allow calls to this module from the command line
-if __name__ == '__main__':
-    import sys
-    sys.exit(-1)
