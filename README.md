@@ -1,7 +1,6 @@
-# ml-meta-wrapper (to be renamed to something more appropriate)
+# Gazer-learn
 
-The project aims to develop a customized ML framework written for python versions => 3.4.x. on top of existing libraries. Currently, the project is still in its infancy, and only the bare minimum of functionality is present.  No original features 
-have thus been added.
+The project aims to develop a customized ML framework written for python versions>=3.4 on top of existing libraries. Currently, the project is still in its infancy, and only the bare minimum of functionality is present. No original features have thus been added.
 
 However, some (perhaps) original ideas drawing upon the my background from statistical cosmology to be implemented are:
 * Markov Chain Monte Carlo scheme for optimization of (very-) large ensemble models for large data sets where training
