@@ -27,9 +27,11 @@ class MetadSVMClassifier(BaseClassifier):
         self.init_params_kernel['n_components'] = n_components
         self.init_params_kernel['random_state'] = random_state
         
+        self.estimator = self.get_clf()    
+        
     def get_clf(self):
         return Pipeline([
-            ('kernelize', RBFSampler(**init_params_kernel)), 
+            ('kernelize', Nystroem(**init_params_kernel)), 
             ('model', SGDClassifier(**init_params))
         ])
         pipeline
