@@ -3,19 +3,25 @@ from sklearn.linear_model import SGDClassifier
 from sklearn.kernel_approximation import Nystroem
 from base import BaseClassifier
 
-class MetadSVMClassifier(BaseClassifier):
+class MetaSVMClassifier(BaseClassifier):
     
-    def __init__(
-        
-                kernel='rbf', gamma=None, coef0=1, degree=3, kernel_params=None, n_components=100, random_state=None)
+    def __init__(self, alpha=0.0001, n_iter=5, learning_rate='optimal', kernel='rbf', 
+                 gamma=None, coef0=1, degree=3, kernel_params=None, n_components=100, 
+                 random_state=None)
         """
         In some cases we are cheating: we emulate e.g. an RBF kernel by using a kernel approximation on the input data.
         
         """
-        self.name = 'svm'
+        self.name = 'svm_%' % kernel
         self.max_n_iter = 1000
         
         self.init_params = {}
+        self.init_params['loss'] = 'hinge'
+        self.init_params['penalty'] = 'l2'
+        self.init_params['alpha'] = alpha
+        self.init_params['fit_intercept'] = False
+        self.init_params['n_iter'] = n_iter
+        self.init_params['learning_rate'] = learning_rate
         self.init_params['random_state'] = random_state
         
         self.init_params_kernel = {}
@@ -31,7 +37,11 @@ class MetadSVMClassifier(BaseClassifier):
         
     def get_clf(self):
         return Pipeline([
-            ('kernelize', Nystroem(**init_params_kernel)), 
-            ('model', SGDClassifier(**init_params))
+            ('kernelize', Nystroem(**self.init_params_kernel)), 
+            ('model', SGDClassifier(**self.init_params))
         ])
-        pipeline
+        
+    
+        
+        
+        

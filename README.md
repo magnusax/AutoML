@@ -1,41 +1,36 @@
 # Gazer-learn
 
-The project aims to develop a customized ML framework written for python versions>=3.4 on top of existing libraries. Currently, the project is still in its infancy, and only the bare minimum of functionality is present. No original features have thus been added.
+As in: "standing on the shoulders of giants, gazing at the stars"
 
-However, some (perhaps) original ideas drawing upon the my background from statistical cosmology to be implemented are:
-* Markov Chain Monte Carlo scheme for optimization of (very-) large ensemble models for large data sets where training
-  times are relatively long.
-* Model perturbation and greedy adaptation.
-* Randomized ensembling.
+The project aims to develop a customized ML framework, leveraging the power of existing popular libraries. Currently tested for python versions>=3.4. 
 
+The project is still in its infancy, and only the bare minimum of functionality is present.
+
+Some ideas are currently being implemented, e.g.
+* Markov Chain Monte Carlo scheme for optimization of (very-) large ensemble models 
+for large data sets where training times are relatively long.
+* Model perturbation and greedy adaptation
+* Ensembling techniques
 
 Libraries which will be heavily relied upon are:
 
 ### Preprocessing
-* Scikit-learn (for e.g. outlier detection and standardizing)
+* Scikit-learn 
 * Scipy
-* ...
-* More to follow
 
 ### Visualization
-* Seaborn
-* Hypertools (convenient for visualizing e.g. low-dimensional representations of clusters)
+* Matplotlib
+* Seaborn 
 
 ### Learning and evaluation
 * Scikit-learn
-* Tensorflow/Theano wrapped with keras
-* Xgboost
-* ...
-* More to follow
-
-### Intepretation 
-* LIME (perhaps, if deemed appropriate. In any case, it will probably be in the form of a wrapper module to ensure easy API-use)
+* (Tentative) Keras (Tensorflow/Theano)
+* (Tentative) Xgboost
 
 TODO: add direct links to each github project mentioned on this page, 
 to ensure that credit and recognition goes to developers
 
 
 ## Comments
-Wrapper modules will be added with time. Albeit most machine learning tasks fit on a single laptop, I will consider writing some modules in Spark (perhaps best suited for ETL jobs) or DASK/BLAZE.
-
-Project maintainer can be reached at: johanmagnusaxelsson [at] gmail [dot] com
+As this project is in its initial development phase, the code has not been tested properly yet. It thus follows
+that it has not yet been uploaded to the PyPi repository yet. Project developer's contact info is available in the setup.py file. 
