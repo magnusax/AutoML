@@ -1,52 +1,41 @@
 from scipy.stats import randint, uniform 
-from sklearn.ensemble import AdaBoostClassifier, AdaBoostRegressor
+from sklearn.ensemble import AdaBoostClassifier
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.linear_model import LogisticRegression
-# Import base ensemle classifier and regressor objects
 from base import EnsembleBaseClassifier, EnsembleBaseRegressor
 
-
-class MetaAdaBoostRegressorAlgorithm(EnsembleBaseRegressor):
-    """ 
-    Regression object
-    """
-    def __init__(self, *args):
-        return AdaBoostRegressor()
-
-    
-class MetaAdaBoostClassifierAlgorithm(EnsembleBaseClassifier):
+  
+class MetaAdaBoostClassifier(EnsembleBaseClassifier):
     """
     Meta classifier object that sits on top of scikit-learn's
     'adaboost' algorithm. We provide extra utilities and functionality
     that aims to automate several steps in e.g. a cross-validation context.
     """
     def __init__(self, base_estimator=None, n_estimators=50, learning_rate=0.1, algorithm='SAMME.R', random_state=None):
+        
         self.name = "adaboost"
         self.max_n_iter = 1000
         
+        self.init_params = {}        
         if base_estimator is None:
-            self.base_estimator = DecisionTreeClassifier()
+            self.init_params['base_estimator'] = DecisionTreeClassifier()
         else:
-            self.base_estimator = base_estimator
-        self.n_estimators = n_estimators
-        self.learning_rate = learning_rate
-        self.algorithm = algorithm
-        self.random_state = random_state
+            self.init_params['base_estimator'] = base_estimator
+        self.init_params['n_estimators'] = n_estimators
+        self.init_params['learning_rate'] = learning_rate
+        self.init_params['algorithm'] = algorithm
+        self.init_params['random_state'] = random_state
         
         # Initialize algorithm and make it available
-        self.estimator = self.get_clf()        
+        self.estimator = self._get_clf()        
         # Initialize dictionary with trainable parameters
         self.cv_params = self._set_cv_params()       
         # Initialize list which can be populated with params to tune 
-        self.cv_params_to_tune = []
+        self.cv_params_to_tune = list()
 
         
-    def get_clf(self):
-        return AdaBoostClassifier(base_estimator = self.base_estimator, 
-                                  n_estimators = self.n_estimators,
-                                  learning_rate = self.learning_rate, 
-                                  algorithm = self.algorithm,
-                                  random_state = self.random_state)    
+    def _get_clf(self):
+        return AdaBoostClassifier(**self.init_params)    
     
     def get_info(self):
         return {'does_classification': True,
@@ -54,14 +43,13 @@ class MetaAdaBoostClassifierAlgorithm(EnsembleBaseClassifier):
                 'does_regression': False, 
                 'predict_probas': hasattr(self.estimator, 'predict_proba')}
         
-    def sample_hyperparams(self, params, num_params, mode, keys):
-        # We let the child class inherit a general method from its super class
-        return super().trainable_hyperparams(params, num_params, mode, keys)
+    def set_tune_params(self, params, num_params=1, mode='random', keys=list()):
+        return super().set_tune_params(params, num_params, mode, keys)
          
     def _set_cv_params(self):
         """
-        Dictionary containing all trainable parameters. This method assumes that we are using the DecisionTreeClassifier
-        as base estimator. Consider including more base estimators later.
+        Dictionary containing all trainable parameters. This method assumes that we are using 
+        the DecisionTreeClassifier as base estimator. Consider including more base estimators later.
         """
         
         ad = {'n_estimators': [50, 100, 200],
@@ -74,7 +62,8 @@ class MetaAdaBoostClassifierAlgorithm(EnsembleBaseClassifier):
                   'base_estimator__max_features': [0.1, 'auto', 'log2'],
                   'base_estimator__class_weight': ['balanced', None]}
         
-        # Tends to overfit: maybe use weak learners only, or perhaps skip parameter tuning entirely
+        # Tends to overfit: maybe use weak learners only, or perhaps skip 
+        # parameter tuning entirely
         elif isinstance(self.base_estimator, type(LogisticRegression())): 
             be = {'base_estimator__C': uniform(0, 1000),
                   'base_estimator__fit_intercept': [True, False],

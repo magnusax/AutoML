@@ -1,28 +1,33 @@
-from base import BaseClassifier
+from scipy.stats import uniform as sp_uniform
 from sklearn.naive_bayes import GaussianNB
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.naive_bayes import BernoulliNB
+from base import BaseClassifier
 
 
-class MetaGaussianNBayesClassifierAlgorithm(BaseClassifier):
+class MetaGaussianNBayesClassifier(BaseClassifier):
     """
     Docstring:    
     Gaussian naive bayes classifier
     """
     
     def __init__(self, priors=None):
+        
         self.name = 'gaussian_nb'
         self.max_n_iter = 0
-        self.priors = priors                    
+        
+        self.init_params = {}
+        self.init_params['priors'] = priors                    
+        
         # Initialize algorithm and make it available
-        self.estimator = self.get_clf()        
+        self.estimator = self._get_clf()        
         # Initialize dictionary with trainable parameters
         self.cv_params = self._set_cv_params()
         # Initialize list which can be populated with params to tune 
         self.cv_params_to_tune = []
         
-    def get_clf(self):
-        return GaussianNB(priors = self.priors)            
+    def _get_clf(self):
+        return GaussianNB(**self.init_params)            
     
     def get_info(self):
         return {'does_classification': True,
@@ -34,16 +39,15 @@ class MetaGaussianNBayesClassifierAlgorithm(BaseClassifier):
         """ Update parameter values in algorithm """
         return super().adjust_params(params)
 
-    def sample_hyperparams(self, params, num_params=1, mode='random', keys=[]):
-        """ Sample a subset of hyperparameters to optimize """
-        return super().trainable_hyperparams(params, num_params, mode, keys)  
+    def set_tune_params(self, params, num_params=1, mode='random', keys=list()):
+        return super().set_tune_params(params, num_params, mode, keys)
         
     def _set_cv_params(self):
         """ Dictionary containing all trainable parameters """
         return [{}]
 
         
-class MetaMultinomialNBayesClassifierAlgorithm(BaseClassifier):
+class MetaMultinomialNBayesClassifier(BaseClassifier):
     """
     Docstring:    
     Multinomial naive bayes classifier
@@ -56,23 +60,24 @@ class MetaMultinomialNBayesClassifierAlgorithm(BaseClassifier):
     """
     
     def __init__(self, alpha=1.0, fit_prior=True, class_prior=None):
+        
         self.name = 'multinomial_nb'
         self.max_n_iter = 50
-        self.alpha = alpha
-        self.fit_prior = fit_prior
-        self.class_prior = class_prior
+        
+        self.init_params = {}
+        self.init_params['alpha'] = alpha
+        self.init_params['fit_prior'] = fit_prior
+        self.init_params['class_prior'] = class_prior
         
         # Initialize algorithm and make it available
-        self.estimator = self.get_clf()        
+        self.estimator = self._get_clf()        
         # Initialize dictionary with trainable parameters
         self.cv_params = self._set_cv_params()
         # Initialize list which can be populated with params to tune 
         self.cv_params_to_tune = []
         
-    def get_clf(self):
-        return MultinomialNB(alpha = self.alpha,
-                             fit_prior = self.fit_prior,
-                             class_prior = self.class_prior)
+    def _get_clf(self):
+        return MultinomialNB(**self.init_params)
     
     def get_info(self):
         return {'does_classification': True,
@@ -84,43 +89,43 @@ class MetaMultinomialNBayesClassifierAlgorithm(BaseClassifier):
         """ Update parameter values in algorithm """
         return super().adjust_params(params)
 
-    def sample_hyperparams(self, params, num_params=1, mode='random', keys=[]):
-        """ Sample a subset of hyperparameters to optimize """
-        return super().trainable_hyperparams(params, num_params, mode, keys)   
+    def set_tune_params(self, params, num_params=1, mode='random', keys=list()):
+        return super().set_tune_params(params, num_params, mode, keys)
         
     def _set_cv_params(self):
-        """ Dictionary containing all trainable parameters """
-        from scipy.stats import uniform as sp_uniform        
-        return [{'alpha': sp_uniform(0, 1),
-                 'fit_prior': [True, False] }]    
+        """ Dictionary containing all trainable parameters """      
+        return [{
+            'alpha': sp_uniform(0, 1),
+            'fit_prior': [True, False] 
+        }]    
 
 
-class MetaBernoulliNBayesClassifierAlgorithm(BaseClassifier):
+class MetaBernoulliNBayesClassifier(BaseClassifier):
     """
     Docstring:    
     Bernoulli naive bayes classifier
     """
     
     def __init__(self, alpha=1.0, binarize=0.0, fit_prior=True, class_prior=None):
+        
         self.name = 'bernoulli_nb'
         self.max_n_iter = 50
-        self.alpha = alpha
-        self.binarize = binarize
-        self.fit_prior = fit_prior
-        self.class_prior = class_prior
+        
+        self.init_params = {}
+        self.init_params['alpha'] = alpha
+        self.init_params['binarize'] = binarize
+        self.init_params['fit_prior'] = fit_prior
+        self.init_params['class_prior'] = class_prior
         
         # Initialize algorithm and make it available
-        self.estimator = self.get_clf()        
+        self.estimator = self._get_clf()        
         # Initialize dictionary with trainable parameters
         self.cv_params = self._set_cv_params()
         # Initialize list which can be populated with params to tune 
         self.cv_params_to_tune = []
         
-    def get_clf(self):
-        return BernoulliNB(alpha = self.alpha,
-                           binarize = self.binarize, 
-                           fit_prior = self.fit_prior, 
-                           class_prior = self.class_prior)
+    def _get_clf(self):
+        return BernoulliNB(**self.init_params)
     
     def get_info(self):
         return {'does_classification': True,
@@ -132,17 +137,12 @@ class MetaBernoulliNBayesClassifierAlgorithm(BaseClassifier):
         """ Update parameter values in algorithm """
         return super().adjust_params(params)
 
-    def sample_hyperparams(self, params, num_params, mode, keys):
-        """ Sample a subset of hyperparameters to optimize """
-        return super().trainable_hyperparams(params, num_params, mode, keys)   
+    def set_tune_params(self, params, num_params=1, mode='random', keys=list()):
+        return super().set_tune_params(params, num_params, mode, keys)   
         
     def _set_cv_params(self):
         """ Dictionary containing all trainable parameters """
-        from scipy.stats import uniform as sp_uniform        
-        return [{'alpha': sp_uniform(0, 1),  
-                 'fit_prior': [True, False] }]
-
-
-if __name__ == '__main__':
-    import sys
-    sys.exit(-1)
+        return [{
+            'alpha': sp_uniform(0, 1),  
+            'fit_prior': [True, False] 
+        }]

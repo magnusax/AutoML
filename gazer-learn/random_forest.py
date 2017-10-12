@@ -1,9 +1,9 @@
-from sklearn.ensemble import RandomForestClassifier
 from base import BaseClassifier
 from scipy.stats import randint
-
+from sklearn.ensemble import RandomForestClassifier
     
-class MetaRandomForestClassifierAlgorithm(BaseClassifier):
+    
+class MetaRandomForestClassifier(BaseClassifier):
     """
     Implementation of random forest classifier:
     http://scikit-learn.org/0.17/modules/generated/sklearn.ensemble.\
@@ -33,15 +33,14 @@ class MetaRandomForestClassifierAlgorithm(BaseClassifier):
         self.init_params['class_weight'] = class_weight
         
         # Initialize algorithm and make it available
-        self.estimator = self.get_clf()
-        
+        self.estimator = self._get_clf()        
         # Initialize dictionary with trainable parameters
-        self.cv_params = self._set_cv_params()
-        
+        self.cv_params = self._set_cv_params()        
         # Initialize list which can be populated with params to tune 
         self.cv_params_to_tune = []
-
-    def get_clf(self):
+        
+        
+    def _get_clf(self):
         return RandomForestClassifier(**self.init_params)
 
     def get_info(self):
@@ -51,19 +50,19 @@ class MetaRandomForestClassifierAlgorithm(BaseClassifier):
     def adjust_params(self, d):
         return super().adjust_params(d)
     
-    def sample_hyperparams(self, params, num_params, mode, keys):
-        return super().trainable_hyperparams(params, num_params, mode, keys)  
+    def set_tune_params(self, params, num_params=1, mode='random', keys=list()):
+        return super().set_tune_params(params, num_params, mode, keys)  
     
     def _set_cv_params(self):
         """
         Trainable params available in self.cv_params[i].keys() for i in len(self.cv_params)
         """
-        return [
-            {"max_depth": [None, 3, 5, 7],
-             "max_features": randint(1, 21),
-             "min_samples_split": randint(1, 21),
-             "min_samples_leaf": randint(1, 21),
-             "bootstrap": [True, False],
-             "criterion": ["gini", "entropy"],
-             "n_estimators": [10, 64, 128, 512]},
+        return [{
+            "max_depth": [None, 3, 5, 7],
+            "max_features": randint(1, 21),
+            "min_samples_split": randint(1, 21),
+            "min_samples_leaf": randint(1, 21),
+            "bootstrap": [True, False],
+            "criterion": ["gini", "entropy"],
+            "n_estimators": [10, 64, 128, 512]},
         ]

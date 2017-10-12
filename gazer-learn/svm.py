@@ -1,7 +1,12 @@
+from scipy.stats import uniform
+from sampling import loguniform
+
+from base import BaseClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.linear_model import SGDClassifier
 from sklearn.kernel_approximation import Nystroem
-from base import BaseClassifier
+
+
 
 class MetaSVMClassifier(BaseClassifier):
     
@@ -33,15 +38,26 @@ class MetaSVMClassifier(BaseClassifier):
         self.init_params_kernel['n_components'] = n_components
         self.init_params_kernel['random_state'] = random_state
         
-        self.estimator = self.get_clf()    
+        self.estimator = self._get_clf()    
+        self.cv_params = self._set_cv_params() 
+        self.cv_params_to_tune = []
         
-    def get_clf(self):
+    def _get_clf(self):
         return Pipeline([
-            ('kernelize', Nystroem(**self.init_params_kernel)), 
+            ('kernel', Nystroem(**self.init_params_kernel)), 
             ('model', SGDClassifier(**self.init_params))
         ])
         
-    
+    def _set_cv_params(self):
+        kernel = {
+            'kernel__gamma': loguniform(low=1e-3, high=1e+3),
+            'kernel__n_components': [100, ]
+        }
+        
+        model = [{
+            'model__alpha': loguniform(low=1e-7, high=1e+7), 
+            'model__n_iter': [3, 6, 12, 25, 50],
+        }]
         
         
         

@@ -1,11 +1,10 @@
-import sys
 from scipy.stats import uniform
 from sampling import loguniform
 from base import BaseClassifier
 from sklearn.linear_model import SGDClassifier
 
 
-class MetaSGDClassifierAlgorithm(BaseClassifier):
+class MetaSGDClassifier(BaseClassifier):
 
     # Use the defaults from scikit-learn package
     def __init__(self, loss='hinge', penalty='l2', alpha=0.0001, l1_ratio=0.15, fit_intercept=True, n_iter=5, learning_rate='optimal', random_state=None):
@@ -24,14 +23,14 @@ class MetaSGDClassifierAlgorithm(BaseClassifier):
         self.init_params['random_state'] = random_state
         
         # Initialize algorithm and make it available
-        self.estimator = self.get_clf()        
+        self.estimator = self._get_clf()        
         # Initialize dictionary with trainable parameters
         self.cv_params = self._set_cv_params()
         # Initialize list which can be populated with params to tune 
         self.cv_params_to_tune = []
 
         
-    def get_clf(self):
+    def _get_clf(self):
         return SGDClassifier(**self.init_params)
     
     def get_info(self):
@@ -43,8 +42,8 @@ class MetaSGDClassifierAlgorithm(BaseClassifier):
     def adjust_params(self, d):
          return super().adjust_params(d)
     
-    def sample_hyperparams(self, params, num_params, mode, keys):
-        return super().trainable_hyperparams(params, num_params, mode, keys)  
+    def set_tune_params(self, params, num_params=1, mode='random', keys=list()):
+        return super().set_tune_params(params, num_params, mode, keys)    
     
     def _set_cv_params(self):
         """
@@ -68,7 +67,3 @@ class MetaSGDClassifierAlgorithm(BaseClassifier):
               'n_iter': [5, 10, 25, 50, 100],
               'learning_rate': ['optimal', 1e-1, 1e-2] }  
              ]
-
-    
-if __name__ == '__main__':
-    sys.exit(-1)
