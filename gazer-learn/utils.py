@@ -1,24 +1,20 @@
 """
 Utility module where convenience methods are placed
-
 """
+import numpy as np
+from skopt.space import Real, Categorical, Integer  
+
 
 def skopt_space_mapping(name_params):
     """
-    This method maps a dictionary of parameter settings to the appropriate scikit-optimize format 
-    
+    This method maps a dictionary of parameter settings to the appropriate scikit-optimize format     
     Input:
     -------------
-    name_params: an iterable of (classifier name, classifier parameter dictionary) tuples
-    
+    name_params: an iterable of (classifier name, classifier parameter dictionary) tuples   
     Ouput:
     -------------
-    A list of (classifier name, classifier dictionary in skopt space format)
-    
-    """
-    import numpy as np
-    from skopt.space import Real, Categorical, Integer        
-    
+    A list of (classifier name, classifier dictionary in skopt space format)    
+    """         
     dicts = []
     # If an iterable has 100 elements or more, we convert it to either discrete (Integer dist.)
     # or continuous (Real dist.) distribution, with values between min(iterable) and max(iterable)
@@ -71,11 +67,6 @@ def skopt_space_mapping(name_params):
     return dicts
 
 
-# ----------------------------------------------------------------------------------------------
-#          Modules below this line are unused and should be scheduled for removal
-# ----------------------------------------------------------------------------------------------
-
-
 def one_of_k_encoding(cols, df):
     """ Categorial encoding of columns where datatype is categorical. 
         Input:    cols [list]
@@ -88,9 +79,3 @@ def one_of_k_encoding(cols, df):
             df = pd.concat([df, pd.get_dummies(df[col], prefix=col)], axis=1)
             df.drop(col, axis=1, inplace=True)
     return df
-
-
-
-if __name__ == '__main__':
-    import sys
-    sys.exit(-1)

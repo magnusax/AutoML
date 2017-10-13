@@ -92,6 +92,7 @@ class MetaWrapperClassifier():
             ('naive_bayes', 'MetaMultinomialNBayesClassifier'),
             ('naive_bayes', 'MetaBernoulliNBayesClassifier'),
             ('random_forest', 'MetaRandomForestClassifier'),
+            ('svm', 'MetaSVMClassifier'),
         ]        
         return [self._add_algorithm(m, c) for m, c in algorithms]
 

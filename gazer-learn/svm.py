@@ -1,4 +1,4 @@
-from scipy.stats import uniform
+from scipy.stats import uniform, randint
 from sampling import loguniform
 
 from base import BaseClassifier
@@ -7,28 +7,21 @@ from sklearn.linear_model import SGDClassifier
 from sklearn.kernel_approximation import Nystroem
 
 
-
 class MetaSVMClassifier(BaseClassifier):
     
-    def __init__(self, alpha=0.0001, n_iter=5, learning_rate='optimal', kernel='rbf', 
-                 gamma=None, coef0=1, degree=3, kernel_params=None, n_components=100, 
-                 random_state=None)
+    
+    
+    def __init__(self, alpha=0.0001, fit_intercept=True, penalty='l2', n_iter=5, learning_rate='optimal', 
+                 kernel='rbf', gamma=None, coef0=1, degree=3, kernel_params=None, n_components=100, random_state=None):
         """
-        In some cases we are cheating: we emulate e.g. an RBF kernel by using a kernel approximation on the input data.
+        In some cases we are cheating: we emulate e.g. an RBF kernel by using a kernel approximation on the input data.        
+        """
         
-        """
-        self.name = 'svm_%' % kernel
+        # Meta data
+        self.name = 'svm-SVC'
         self.max_n_iter = 1000
-        
-        self.init_params = {}
-        self.init_params['loss'] = 'hinge'
-        self.init_params['penalty'] = 'l2'
-        self.init_params['alpha'] = alpha
-        self.init_params['fit_intercept'] = False
-        self.init_params['n_iter'] = n_iter
-        self.init_params['learning_rate'] = learning_rate
-        self.init_params['random_state'] = random_state
-        
+                
+        # Init params
         self.init_params_kernel = {}
         self.init_params_kernel['kernel'] = kernel
         self.init_params_kernel['gamma'] = gamma
@@ -38,6 +31,16 @@ class MetaSVMClassifier(BaseClassifier):
         self.init_params_kernel['n_components'] = n_components
         self.init_params_kernel['random_state'] = random_state
         
+        self.init_params = {}
+        self.init_params['loss'] = 'hinge'
+        self.init_params['penalty'] = penalty
+        self.init_params['alpha'] = alpha
+        self.init_params['fit_intercept'] = fit_intercept
+        self.init_params['n_iter'] = n_iter
+        self.init_params['learning_rate'] = learning_rate
+        self.init_params['random_state'] = random_state
+
+        # Methods
         self.estimator = self._get_clf()    
         self.cv_params = self._set_cv_params() 
         self.cv_params_to_tune = []
@@ -48,16 +51,37 @@ class MetaSVMClassifier(BaseClassifier):
             ('model', SGDClassifier(**self.init_params))
         ])
         
-    def _set_cv_params(self):
-        kernel = {
-            'kernel__gamma': loguniform(low=1e-3, high=1e+3),
-            'kernel__n_components': [100, ]
-        }
+    def get_info(self):
+        return {'does_classification': True,
+                'does_multiclass': True,
+                'does_regression': False, 
+                'predict_probas': hasattr(self.estimator, 'predict_proba')}
         
-        model = [{
+    def adjust_params(self, par):
+        return super().adjust_params(par)    
+    
+    def _set_cv_params(self):
+        
+        kernel1 = {
+            'kernel__kernel': ['rbf'],
+            'kernel__gamma': loguniform(low=1e-3, high=1e+3),
+            'kernel__n_components': [100, 250, 500, 1000, 1500]}
+        kernel2 = {
+            'kernel__kernel': ['poly'],
+            'kernel__degree': randint(1, 4),
+            'kernel__coef0': uniform(0., 1.0),
+            'kernel__n_components': [100, 250, 500, 1000, 1500]}               
+        model = {
             'model__alpha': loguniform(low=1e-7, high=1e+7), 
             'model__n_iter': [3, 6, 12, 25, 50],
-        }]
+            'model__fit_intercept': [True, False],
+            'model__penalty': ['l1', 'l2']}
         
+        param_dict1 = kernel1
+        param_dict1.update(model)
+        param_dict2 = kernel2
+        param_dict2.update(model)
+                           
+        return [param_dict1, param_dict2]
         
         

@@ -39,8 +39,8 @@ class MetaSGDClassifier(BaseClassifier):
                 'does_regression': False, 
                 'predict_probas': hasattr(self.estimator, 'predict_proba')}
     
-    def adjust_params(self, d):
-         return super().adjust_params(d)
+    def adjust_params(self, par):
+         return super().adjust_params(par)
     
     def set_tune_params(self, params, num_params=1, mode='random', keys=list()):
         return super().set_tune_params(params, num_params, mode, keys)    

@@ -51,11 +51,12 @@ class MetaAdaBoostClassifier(EnsembleBaseClassifier):
         Dictionary containing all trainable parameters. This method assumes that we are using 
         the DecisionTreeClassifier as base estimator. Consider including more base estimators later.
         """
+        _base_estimator = self.init_params['base_estimator']
         
         ad = {'n_estimators': [50, 100, 200],
               'learning_rate': [0.1, 0.05, 0.01]}
         
-        if isinstance(self.base_estimator, type(DecisionTreeClassifier())):
+        if isinstance(_base_estimator, type(DecisionTreeClassifier())):
             be = {'base_estimator__criterion': ['gini', 'entropy'],
                   'base_estimator__max_depth': randint(1, 8), # Do not let it go too deep
                   'base_estimator__min_samples_leaf': randint(2, 20),
@@ -64,7 +65,7 @@ class MetaAdaBoostClassifier(EnsembleBaseClassifier):
         
         # Tends to overfit: maybe use weak learners only, or perhaps skip 
         # parameter tuning entirely
-        elif isinstance(self.base_estimator, type(LogisticRegression())): 
+        elif isinstance(_base_estimator, type(LogisticRegression())): 
             be = {'base_estimator__C': uniform(0, 1000),
                   'base_estimator__fit_intercept': [True, False],
                   'base_estimator__penalty': ['l1', 'l2']} 

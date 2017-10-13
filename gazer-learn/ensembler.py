@@ -1,7 +1,9 @@
-import sys
 import numpy as np
 import warnings
 from copy import deepcopy
+
+from scipy.stats import uniform
+from sampling import loguniform
 from library import expose_library
 from ml_meta_wrapper import MetaWrapperClassifier
 
@@ -20,10 +22,8 @@ def _gen_numeric_grid(grid):
             raise ValueError('Discrete sampling not allowed yet...check if you need it.')           
         elif category == 'continuous':           
             if prior == 'uniform':
-                from scipy.stats import uniform
                 return np.linspace(low, high, num, endpoint=True)            
             elif prior == 'loguniform':
-                from sampling import loguniform
                 logs = loguniform(low=low, high=high, size=num)
                 return logs.range()
     else:
@@ -70,7 +70,3 @@ def construct_ensemble(X, names=None):
         names = MetaWrapperClassifier(method='complete').get_names()
     library = expose_library(names, X.shape[0], X.shape[1])
     return {name:_generate(name, grid) for name, grid in library}
-
-
-if __name__ == '__main__':
-    sys.exit(-1)
