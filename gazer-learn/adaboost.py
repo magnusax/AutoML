@@ -73,6 +73,6 @@ class MetaAdaBoostClassifier(EnsembleBaseClassifier):
             be = {} # base estimator specific options not implemented for other classifiers
         
         # This procedure is consistent and likely "version proof".
-        d = ad.copy()
-        d.update(be) # Mutates 'd' so it returns None
-        return [d]
+        params = ad.copy()
+        params.update(be) # Mutates dict (returns None)
+        return list(params)

@@ -1,7 +1,6 @@
-import sys
 import numpy as np
 
-class loguniform():
+class Loguniform(object):
     
     def __init__(self, low, high, size=1, base=10):
         """
@@ -25,7 +24,3 @@ class loguniform():
         Return a range of floats from 'low' to 'high' in powers of (almost always) 10.
         """
         return np.power(self._base, np.linspace(np.log10(self.a), np.log10(self.b), self._size, endpoint=True))
-    
-    
-if __name__ == '__main__':
-    sys.exit(-1)

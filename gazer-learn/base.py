@@ -10,26 +10,27 @@ class BaseClassifier():
         """Base class for all tunable classifiers"""
         self.__classname__ = 'BaseClassifier'
     
-    def adjust_params(self, parms):
+    def adjust_params(self, params):
         """ Adjust classifier parameter helper function """
 
-        if not isinstance(parms, dict):
-            raise ValueError("Expect 'dict'. Got '%s'" % type(parms))
-        fail = 0    
-        for k, v in parms.items():
-            try: 
-                self.estimator.set_params(**{k:v})
-            except: 
-                fail =+ 1
-        if fail > 0:
-            warnings.warn("warning: at least one parameter not set.")
+        if not isinstance(params, dict):
+            raise ValueError("Expected dict, got: %s" % type(params))
+                
+        params_to_change = list(params.keys())
+        estimator_params = list(self.estimator.get_params().keys())
+        
+        for key in params_to_change:
+            if not key in estimator_params:
+                del params[key]
+                
+        self.estimator.set_params(**params)
         return self
     
-    def freeze_cv_params(self, parms):
+    def freeze_cv_params(self, param):
         """ Freeze a trainable parameter to fixed value. Useful for when grid searching """
-        if not instancde(parms, dict):
-            raise ValueError("Expect 'dict'. Got '%s'" % type(parms))
-        for k, v in parms.items():
+        if not isinstance(param, dict):
+            raise ValueError("Expect 'dict'. Got '%s'" % type(param))
+        for k, v in param.items():
             if k in self.estimator.cv_params.keys():
                 self.estimator.cv_params[k] = v
         return self

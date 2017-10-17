@@ -1,5 +1,5 @@
 from scipy.stats import uniform
-from sampling import loguniform
+from sampling import Loguniform
 from base import BaseClassifier
 from sklearn.linear_model import SGDClassifier
 
@@ -53,7 +53,7 @@ class MetaSGDClassifier(BaseClassifier):
         # Trainable params available in self.cv_params[i].keys() for i in len(self.cv_params)
         return [
              {'penalty': ['l1', 'l2'],
-              'alpha': loguniform(low=1e-7, high=1e+7), 
+              'alpha': Loguniform(low=1e-7, high=1e+7), 
               'fit_intercept': [True, False],
               'class_weight': ['balanced', None],
               'n_iter': [5, 10, 25, 50, 100],
@@ -61,7 +61,7 @@ class MetaSGDClassifier(BaseClassifier):
              
              {'penalty': ['elasticnet'],
               'l1_ratio': uniform(0, 1),
-              'alpha': loguniform(low=1e-7, high=1e+7), 
+              'alpha': Loguniform(low=1e-7, high=1e+7), 
               'fit_intercept': [True, False],
               'class_weight': ['balanced', None],
               'n_iter': [5, 10, 25, 50, 100],

@@ -1,4 +1,4 @@
-from scipy.stats import randint, uniform
+from scipy.stats import randint
 from sklearn.neighbors import KNeighborsClassifier
 from base import BaseClassifier
 

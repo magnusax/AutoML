@@ -1,4 +1,4 @@
-from scipy.stats import uniform as sp_uniform
+from scipy.stats import uniform
 from sklearn.naive_bayes import GaussianNB
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.naive_bayes import BernoulliNB
@@ -95,7 +95,7 @@ class MetaMultinomialNBayesClassifier(BaseClassifier):
     def _set_cv_params(self):
         """ Dictionary containing all trainable parameters """      
         return [{
-            'alpha': sp_uniform(0, 1),
+            'alpha': uniform(0, 1),
             'fit_prior': [True, False] 
         }]    
 
@@ -143,6 +143,6 @@ class MetaBernoulliNBayesClassifier(BaseClassifier):
     def _set_cv_params(self):
         """ Dictionary containing all trainable parameters """
         return [{
-            'alpha': sp_uniform(0, 1),  
+            'alpha': uniform(0, 1),  
             'fit_prior': [True, False] 
         }]
