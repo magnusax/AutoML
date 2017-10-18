@@ -1,5 +1,5 @@
 from scipy.stats import uniform, randint
-from sampling import loguniform
+from sampling import Loguniform
 
 from base import BaseClassifier
 from sklearn.pipeline import Pipeline
@@ -8,9 +8,7 @@ from sklearn.kernel_approximation import Nystroem
 
 
 class MetaSVMClassifier(BaseClassifier):
-    
-    
-    
+
     def __init__(self, alpha=0.0001, fit_intercept=True, penalty='l2', n_iter=5, learning_rate='optimal', 
                  kernel='rbf', gamma=None, coef0=1, degree=3, kernel_params=None, n_components=100, random_state=None):
         """
@@ -64,24 +62,25 @@ class MetaSVMClassifier(BaseClassifier):
         
         kernel1 = {
             'kernel__kernel': ['rbf'],
-            'kernel__gamma': loguniform(low=1e-3, high=1e+3),
-            'kernel__n_components': [100, 250, 500, 1000, 1500]}
+            'kernel__gamma': Loguniform(low=1e-4, high=1e+4),
+            'kernel__n_components': [100, 250, 500, 1000, 1200]}
         kernel2 = {
             'kernel__kernel': ['poly'],
-            'kernel__degree': randint(1, 4),
+            'kernel__degree': randint(1, 5),
             'kernel__coef0': uniform(0., 1.0),
-            'kernel__n_components': [100, 250, 500, 1000, 1500]}               
+            'kernel__n_components': [100, 250, 500, 1000, 1200]}               
         model = {
-            'model__alpha': loguniform(low=1e-7, high=1e+7), 
-            'model__n_iter': [3, 6, 12, 25, 50],
+            'model__alpha': Loguniform(low=1e-7, high=1e+7), 
+            'model__n_iter': [6, 8, 12, 24, 48, 96],
             'model__fit_intercept': [True, False],
             'model__penalty': ['l1', 'l2']}
         
-        param_dict1 = kernel1
-        param_dict1.update(model)
-        param_dict2 = kernel2
-        param_dict2.update(model)
-                           
-        return [param_dict1, param_dict2]
+        kernels = [kernel1, kernel2]
+        cv_params = list()
+        for kernel in kernels:
+            temp = model.copy()
+            temp.update(kernel)
+            cv_params.append(temp)                           
+        return cv_params
         
         

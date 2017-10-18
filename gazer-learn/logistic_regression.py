@@ -1,7 +1,7 @@
 import sys
 import numpy as np
 from scipy.stats import randint, uniform
-from sampling import loguniform
+from sampling import Loguniform
 from sklearn.linear_model import LogisticRegression
 from base import BaseClassifier
 
@@ -56,7 +56,7 @@ class MetaLogisticRegressionClassifier(BaseClassifier):
         """
         # Trainable params available in self.cv_params().keys()
         return [{ 'penalty': ['l1','l2'],
-                  'C': loguniform(low=1e-7, high=1e+7),
+                  'C': Loguniform(low=1e-7, high=1e+7),
                   'fit_intercept': [True, False],
                   'class_weight': ['balanced', None],
                   'max_iter': [50, 100, 200] }]

@@ -81,7 +81,7 @@ class EnsembleBaseClassifier():
     def set_base_estimator(self, clf):
         pass
     
-    def set_train_params(self, params, num_params=1, mode='random', keys=[]):
+    def set_tune_params(self, params, num_params=1, mode='random', keys=[]):
         """
         Docstring:
         

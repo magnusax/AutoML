@@ -7,7 +7,7 @@ import sys
 
 from skopt import gp_minimize
 from utils import skopt_space_mapping 
-from base import EnsembleBaseClassifier 
+from base import EnsembleBaseClassifier, BaseClassifier
 from algorithms import all_algorithms
 
 from importlib import import_module  
@@ -56,7 +56,10 @@ class GazerMetaLearner(object):
             suggestions = [name for name, _ in self.__build_classifier_repository()]
             raise ValueError("Specify name of at least one algorithm in 'estimators'. "\
                              "\nValid options: (%s)" % ", ".join(suggestions))
-            
+        
+        # Does this improve reproducibility???
+        self.random_state = np.random.RandomState(12345678)    
+        
         self.verbose = verbose   
         self.method = method
         self.num_sample = num_sample
@@ -102,9 +105,14 @@ class GazerMetaLearner(object):
         algorithm = getattr(module, algorithm_name)
 
         if issubclass(algorithm, EnsembleBaseClassifier):
-            instance = algorithm(base_estimator=self.base_estimator)
-        else:
-            instance = algorithm()
+            instance = algorithm(base_estimator=self.base_estimator, 
+                                 random_state=self.random_state)
+        elif issubclass(algorithm, BaseClassifier):
+            if hasattr(algorithm(), 'random_state'):
+                instance = algorithm(random_state=self.random_state)
+            else:
+                instance = algorithm()
+                
         return instance.name, instance
     
     def meta_fit(self, X, y, n_jobs=1):
@@ -148,8 +156,29 @@ class GazerMetaLearner(object):
                 probas.append((name, clf.estimator.predict_proba(X)))
         return probas
     
-    def meta_evaluate(self, preds, y_true, metric='accuracy', multiclass=False, **kwargs):
-    
+    def meta_evaluate(self, preds, y_true, metric=None, multiclass=None, **kwargs):
+        """
+        Evalute predictions (preds) against ground truth (y_true) using scikit-learn metrics
+        Input:
+        -------------
+        preds:       a list of (name (str), array-of-predictions (iterable)) tuples (default output from 'meta_predict' method)
+                     e.g. [('my_classifier1', np.array(...)), ('my_classifier2', np.array(...)), ...]  
+        y_true:      an array (iterable) of ground truth labels
+        metric:      a label (str) that indicates type of metric to use (accuracy, auc, f1, recall, precision, log_loss)  
+                     Must be set.
+        multiclass:  True or False. Indicate if this is a multiclass problem or not. Must be set.
+        
+        Output:
+        -------------
+        A list of 3-tuples (one for each algorithm) in the following form: 
+        (classifier: name, classifier: metric performance, classifier: log loss)
+        """
+        
+        if metric is None:
+            raise ValueError("Please specify a metric")
+        if multiclass is None:
+            raise ValueError("Please specify if multiclass or not")
+            
         # List of supported metric names and the corresponding method (tuples)
         metrics = [('accuracy', accuracy_score),
                    ('auc', roc_auc_score),
@@ -157,6 +186,7 @@ class GazerMetaLearner(object):
                    ('recall', recall_score),
                    ('precision', precision_score),
                    ('log_loss', log_loss),]
+        
         metrics_names = [f for f, _ in metrics]
         
         if not metric in metrics_names:
@@ -244,7 +274,7 @@ class GazerMetaLearner(object):
             for idx, param_dict in enumerate(clf.cv_params)
         ]
 
-    def meta_bayes_opt(self, X, y, n_calls=50, scoring='accuracy', greater_is_better=True, cv=10, n_jobs=1, random_state=0):
+    def meta_bayes_opt(self, X, y, n_calls=50, scoring='accuracy', greater_is_better=True, cv=10, n_jobs=1, random_state=None):
         """        
         Use package 'scikit-optimize' >=0.3 in order to do Bayesian optimization instead of random grid search.
         Package URL: https://github.com/scikit-optimize/scikit-optimize/        
@@ -288,8 +318,10 @@ class GazerMetaLearner(object):
                     warnings.simplefilter('ignore')
                     res_gp = gp_minimize(_objective, dim_space, n_calls=n_calls, random_state=random_state)  
                 
+                # Classifier with optimized parameters
+                best_params = {k:v for k,v in zip(param_names, res_gp.x)}
                 
-                results.append({name:[space[1], res_gp]})
+                results.append({name:(best_params, res_gp.fun)})
                         
                 if self.verbose > 0:
                     print("Name: %s \tBest score: %.4f" % (name, -res_gp.fun if greater_is_better else res_gp.fun))        

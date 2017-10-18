@@ -18,5 +18,6 @@ def all_algorithms():
         ('naive_bayes', 'MetaBernoulliNBayesClassifier'),
         ('random_forest', 'MetaRandomForestClassifier'),
         ('svm', 'MetaSVMClassifier'),
+        ('xgboost', 'MetaXGBoostClassifier'),
     ]    
     return implemented
