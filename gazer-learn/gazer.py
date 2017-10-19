@@ -1,6 +1,4 @@
 import numpy as np
-from numpy import random
-
 import warnings
 import time
 import sys
@@ -86,7 +84,7 @@ class GazerMetaLearner(object):
         
         if self.method == 'random':
             print("Sampling %i algorithms" % self.num_sample)
-            clfs = [clfs[i] for i in random.choice(len(clfs), self.num_sample, replace=False)]        
+            clfs = [clfs[i] for i in np.random.choice(len(clfs), self.num_sample, replace=False)]        
         
         return clfs
         
@@ -94,16 +92,24 @@ class GazerMetaLearner(object):
         """
         Return list of (classifier_name, classifier) tuples        
         """        
+        _algorithms = list()       
         _added = all_algorithms()
-        return [self._add_algorithm(m, c) for m, c in _added]
+        for m, c in _added:
+            name, algo = self._add_algorithm(m, c)
+            if name is not None and algo is not None:
+                _algorithms.append((name, algo))
+        return _algorithms
 
     def _add_algorithm(self, module_name, algorithm_name):                     
         try:
             module = import_module(module_name)
-        except:
-            raise ValueError("Could not import module '%s' (%s)" % (module_name, sys.exc_info()[1]))
+        # Should prevent crashing if some library (e.g. xgboost) is missing
+        except ImportError: 
+            warnings.warn("Could not import %s. Traceback: %s" % (module_name, sys.exc_info()[1]))
+            return None, None
+            
         algorithm = getattr(module, algorithm_name)
-
+        
         if issubclass(algorithm, EnsembleBaseClassifier):
             instance = algorithm(base_estimator=self.base_estimator, 
                                  random_state=self.random_state)
@@ -212,7 +218,7 @@ class GazerMetaLearner(object):
     
     def meta_crossval_optimize(self, X, y, 
                                n_iter=12, scoring='accuracy', cv=10, n_jobs=1, 
-                               sample_hyperparams=False, min_hyperparams=2, 
+                               sample_hyperparams=False, min_hyperparams=None, # min_hyperparams = 2 
                                get_hyperparams=False, random_state=None):
         """
         Docstring:        
@@ -242,9 +248,11 @@ class GazerMetaLearner(object):
         
         def _random_grid_search(p_index, clf, clf_name, param_dict):
             clf_name = clf_name + "_pd%i" % (p_index+1) if p_index > 0 else clf_name
-            
-            # Store local copy of parameters
-            param_dist = param_dict.copy()
+
+            param_dist = param_dict.copy()           
+            if len(param_dist) == 0:
+                warnings.warn("%s has an empty parameter dictionary (returning basic 'fit')" % clf_name)
+                return (clf_name, clf.estimator.fit(X,y))
             
             if sample_hyperparams and not get_hyperparams:
                 num_params = np.random.randint(min_hyperparams, len(param_dist))
@@ -255,24 +263,29 @@ class GazerMetaLearner(object):
                     param_dist = clf.set_tune_params(param_dist, keys=clf.cv_params_to_tune, mode='select')            
             
             n_iter_ = min(n_iter, clf.max_n_iter)        
+                      
             random_search = RandomizedSearchCV(clf.estimator, param_distributions=param_dist, n_iter=n_iter_, scoring=scoring, cv=cv, n_jobs=n_jobs, 
-                                               verbose=self.verbose, error_score=0, return_train_score=True, random_state=random_state)
+                                               verbose=0, error_score=0, return_train_score=True, random_state=random_state)            
+            fitted = False
             start_time = time.time()
             try:
                 random_search.fit(X, y)
+                fitted = True
             except:
+                warnings.warn("Failed to search through %s (returning basic 'fit'). \nInfo: %s" % (clf_name, sys.exc_info()[1]))
                 return (clf_name, clf.estimator.fit(X,y))
             else:
                 return (clf_name, random_search.best_estimator_)            
             finally:
-                if self.verbose > 0:
-                    print("Search time = %.2f min." % ((time.time()-start_time)/60.))
-
+                if self.verbose>0 and fitted:
+                    print("=" * 75)
+                    print("Algorithm: %s \tSearch time: %.2f min. \tBest score: %.5f" 
+                          % (clf_name, (time.time()-start_time)/60., random_search.best_score_))
+                    print("=" * 75)
         return [
             _random_grid_search(idx, clf, name, param_dict) 
             for name, clf in self.clf 
-            for idx, param_dict in enumerate(clf.cv_params)
-        ]
+            for idx, param_dict in enumerate(clf.cv_params)]
 
     def meta_bayes_opt(self, X, y, n_calls=50, scoring='accuracy', greater_is_better=True, cv=10, n_jobs=1, random_state=None):
         """        

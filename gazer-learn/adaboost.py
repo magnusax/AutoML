@@ -75,4 +75,4 @@ class MetaAdaBoostClassifier(EnsembleBaseClassifier):
         # This procedure is consistent and likely "version proof".
         params = ad.copy()
         params.update(be) # Mutates dict (returns None)
-        return list(params)
+        return [params]

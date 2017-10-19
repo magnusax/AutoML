@@ -57,7 +57,7 @@ class MetaSGDClassifier(BaseClassifier):
               'fit_intercept': [True, False],
               'class_weight': ['balanced', None],
               'n_iter': [5, 10, 25, 50, 100],
-              'learning_rate': ['optimal', 1e-1, 1e-2] },
+              'learning_rate': ['optimal'] },
              
              {'penalty': ['elasticnet'],
               'l1_ratio': uniform(0, 1),
@@ -65,5 +65,5 @@ class MetaSGDClassifier(BaseClassifier):
               'fit_intercept': [True, False],
               'class_weight': ['balanced', None],
               'n_iter': [5, 10, 25, 50, 100],
-              'learning_rate': ['optimal', 1e-1, 1e-2] }  
+              'learning_rate': ['optimal'] }  
              ]
