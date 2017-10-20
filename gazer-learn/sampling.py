@@ -9,9 +9,10 @@ class Loguniform(object):
         
         """
         self.a = low # DO NOT CHANGE (used in method 'skopt_space_mapping' in utils.py)
-        self.b = high # DO NOT CHANGE (used in method 'skopt_space_mapping' in utils.py)
+        self.b = high # DO NOT CHANGE (used in method 'skopt_space_mapping' in utils.py)        
         self._size = size
         self._base = base
+        self.args = (self.a, self.b, self._size, self._base)
         
     def rvs(self, *args, **kwargs):
         if self._size == 1:

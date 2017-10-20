@@ -1,3 +1,5 @@
+import numpy as np
+
 from xgboost import XGBClassifier
 from base import BaseClassifier
 from scipy.stats import randint, uniform
@@ -53,15 +55,17 @@ class MetaXGBoostClassifier(BaseClassifier):
         """ 
         These default parameter settings are borrowed from 
         HyperOpt :: https://github.com/hyperopt/
-        """
+        """ 
         return [{
             'n_estimators': list(range(50, 550, 50)),
             'learning_rate': uniform(0.01, 0.2),
             'max_depth': randint(2, 10, 1),
             'min_child_weight': randint(1, 10, 1),
-            'subsample': uniform(0.5, 0.5),
-            'colsample_bytree': uniform(0.5, 0.5),
-            'colsample_bylevel': uniform(0.5, 0.5),
+            'subsample': uniform(0.5, 1.0),
+            'colsample_bytree': 
+                list(np.linspace(0.5, 1.0, 6, endpoint=True)),
+            'colsample_bylevel': 
+                list(np.linspace(0.5, 1.0, 6, endpoint=True)),
             'gamma': uniform(0, 1),
             'reg_alpha': Loguniform(1e-10, 1),
             'reg_lambda': uniform(0.1, 10),

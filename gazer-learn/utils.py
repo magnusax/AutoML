@@ -30,8 +30,10 @@ def skopt_space_mapping(params):
         for key, iterable in pars.items():            
             # check if 'iterable' can be sampled using the 'rvs' method
             if hasattr(iterable, 'rvs'):
-                min_ = iterable.a
-                max_ = iterable.b 
+                min_ = iterable.args[0]
+                max_ = iterable.args[1]
+                if max_ <= min_:
+                    raise ValueError("Expected min < max. Found min=%s, max=%s" % (min_, max_))
                 test_val = iterable.rvs()
                 if isinstance(test_val, float):
                     try:
@@ -41,7 +43,7 @@ def skopt_space_mapping(params):
                         prior = 'log-uniform'
                     space[key] = Real(min_, max_, prior=prior)
                 else:
-                    space[key] = Integer(min_, max_+1)
+                    space[key] = Integer(min_, max_)
                 continue
 
             dtypes = [str(type(val)) for val in iterable]

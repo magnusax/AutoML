@@ -60,7 +60,7 @@ class MetaRandomForestClassifier(BaseClassifier):
         return [{
             "max_depth": [None, 3, 5, 7],
             "max_features": randint(1, 21),
-            "min_samples_split": randint(1, 21),
+            "min_samples_split": randint(2, 21),
             "min_samples_leaf": randint(1, 21),
             "bootstrap": [True, False],
             "criterion": ["gini", "entropy"],
