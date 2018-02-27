@@ -6,7 +6,7 @@ from copy import deepcopy
 import numpy as np
 from scipy.stats import uniform
 from sklearn.externals import joblib
-
+from sklearn.exceptions import NotFittedError
 
 from sampling import Loguniform
 from library import library_config
@@ -56,16 +56,19 @@ def fit_ensemble(ens, X, y, save_dir=None):
     fitted = []
     for name, clfs in ens.items():
         total_fits = len(clfs)
-        for i, clf in enumerate(clfs):
-            fitted.append(clf.fit(X,y))
-            
+        for i, clf in enumerate(clfs):            
+            fitted.append(clf.fit(X,y))            
+            try:
+                clf.predict(X[1,:])
+            except NotFittedError as e:
+                print(repr(e))
+                # What do we want to do here? Continue or raise some exception?
             if save_dir is not None:
                 model_name = 'model_%s_%s.pkl' % (name, (i+1))
                 try:
                     joblib.dump(clf, save_dir+model_name)
                 except:
                     warnings.warn("Could not pickle '%s'." % model_name)
-            
             show_progress((i+1)*(100/total_fits))
         print("Fitted all versions of '%s' algorithm." % name)
     return fitted
