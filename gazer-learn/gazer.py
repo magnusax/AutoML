@@ -3,24 +3,27 @@ import warnings
 import time
 import sys
 
+from importlib import import_module  
+from operator import itemgetter
+
+import seaborn as sns
+from matplotlib import pyplot as plt
+
 from skopt import gp_minimize
+from sklearn.preprocessing import LabelBinarizer
+from sklearn.model_selection import cross_val_score, RandomizedSearchCV
+from sklearn.metrics import accuracy_score, roc_auc_score, f1_score, \
+                            recall_score, precision_score, log_loss, \
+                            matthews_corrcoef as mcc
+
+        
 from utils import skopt_space_mapping 
 from base import EnsembleBaseClassifier, BaseClassifier
 from algorithms import all_algorithms
 
-from importlib import import_module  
-from operator import itemgetter
-
-import seaborn as sns; sns.set()
-from matplotlib import pyplot as plt
-
-from sklearn.preprocessing import LabelBinarizer
-from sklearn.metrics import accuracy_score, roc_auc_score, f1_score, \
-recall_score, precision_score, log_loss, matthews_corrcoef as mcc
-from sklearn.model_selection import cross_val_score, RandomizedSearchCV
 
 
-class GazerMetaLearner(object):
+class GazerMetaLearner():
     """
     Docstring:        
     Class that keeps track of available classifiers and implements functionality around them    
@@ -101,13 +104,14 @@ class GazerMetaLearner(object):
         return _algorithms
 
     def _add_algorithm(self, module_name, algorithm_name):                     
-        try:
-            module = import_module(module_name)
+        """ Import classifier algorithms """
+        _classifiers_ = "classifiers."
+        try:           
+            module = import_module(_classifiers_+module_name)
         # Should prevent crashing if some library (e.g. xgboost) is missing
         except ImportError: 
-            warnings.warn("Could not import %s. Traceback: %s" % (module_name, sys.exc_info()[1]))
-            return None, None
-            
+            warnings.warn("Could not import %s." % module_name)
+            return (None, None)            
         algorithm = getattr(module, algorithm_name)
         
         if issubclass(algorithm, EnsembleBaseClassifier):
@@ -117,8 +121,7 @@ class GazerMetaLearner(object):
             if hasattr(algorithm(), 'random_state'):
                 instance = algorithm(random_state=self.random_state)
             else:
-                instance = algorithm()
-                
+                instance = algorithm()                
         return instance.name, instance
     
     def meta_fit(self, X, y, n_jobs=1):
@@ -251,7 +254,7 @@ class GazerMetaLearner(object):
 
             param_dist = param_dict.copy()           
             if len(param_dist) == 0:
-                warnings.warn("%s has an empty parameter dictionary (returning basic 'fit')" % clf_name)
+                #####warnings.warn("%s has an empty parameter dictionary (returning basic 'fit')" % clf_name)
                 return (clf_name, clf.estimator.fit(X,y))
             
             if sample_hyperparams and not get_hyperparams:

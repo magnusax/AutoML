@@ -1,6 +1,5 @@
 from scipy.stats import uniform, randint
 from sampling import Loguniform
-
 from base import BaseClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.linear_model import SGDClassifier
