@@ -1,11 +1,15 @@
 # Gazer-learn
 
-As in: > "standing on the shoulders of giants, gazing at the stars"
+> "Standing on the shoulders of giants, gazing at the stars"
 
-The project aims to develop a customized ML framework, leveraging the power of existing popular libraries. -- Currently tested for python versions `>=3.4`. 
+The project aims to develop a customized ML framework, leveraging the power of existing popular libraries.
+Currently tested for python versions `>=3.4`. 
 
-The project is still in its infancy, and only the bare minimum of functionality is present. But it is currently -- under active development (conditional on time and energy).
-Install will (shortly) be available through the python package index `pip install gazer`. The entrance to -- functionality is the **GazerMetaLearner** object:
+The project is still in its infancy, and only the bare minimum of functionality is present. But it is currently 
+under active development (conditional on time and energy).
+
+Install will (shortly) be available through the python package index `pip install gazer`. The entrance to 
+functionality is the **GazerMetaLearner** object:
     
 ```python
 from gazer import GazerMetaLearner
