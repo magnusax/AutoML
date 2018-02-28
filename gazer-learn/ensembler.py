@@ -2,6 +2,7 @@ import os
 import sys
 import warnings
 from copy import deepcopy
+from __future__ import print_function
 
 import numpy as np
 from scipy.stats import uniform
@@ -14,33 +15,57 @@ from gazer import GazerMetaLearner
 
 
 def ensemble_builder(X, names=None):
-    """ Build ensemble from base learners
+    """ Build ensemble from base learners. If 'names' is not set
+    then method returns an empty dictionary.
+    
     Input:
-        X: input 2D matrix of shape (n_samples, n_columns)
-        names: names of algorithms to fetch from repository (optional).
+    ----------------
+        X (matrix-like): 
+            input 2D matrix of shape (n_samples, n_columns)
+        names (iterable/array-like/list): 
+            iterble of names of algorithms to fetch from repository (optional).
             If not set then names are read from a GazerMetaLearner object.
-    Output:
-        Dictionary containing name-keys with corresponding values being 
-        a list of possible learners with varying settings of hyperparameters.
+    
+    Returns:
+    ----------------
+        dict(str(name_of_algorithm) : list(scikit-learn classifiers)):
+            Dictionary containing name-keys with corresponding values being 
+            a list of possible learners with varying settings of hyperparameters.
     """
+    
     if names is None:
         names = GazerMetaLearner(method='complete').get_names()
-    _lib = library_config(names, X.shape[0], X.shape[1])
+        print("Possible names: %s" % ",".join(names))
+        return {}
     
-    return {name:_generate(name, grid) for name, grid in _lib}
+    name_grid = library_config(names, *X.shape)
+    return {name:_generate(name, grid) for name, grid in name_grid}
 
-def fit_ensemble(ens, X, y, save_dir=None):
-    """ Fit an ensemble of algorithms 
+def fit_ensemble(ens, X, y, save_dir=None, **kwargs):
+    """ Fit an ensemble of algorithms. If 'save_dir' is set then models
+    are pickled to that directory (if directory does not exist, we attempt
+    to create it). Method returns a (flat) list of fitted learners.
+    
     Input:
-        ens (dict): dictionary of (name, learner) tuples. 
-            The learner must have a fit method.
-        X (2D array-like or matrix-like): 2D matrix of shape (n_samples, n_columns)
-        y (array-like): Label vector of shape (n_samples,)
-        save_dir (string): directory to pickle fitted algorithms
-    Output:
-        List of fitted learners. If save_dir is a valid directory it will contain the pickled
-        versions of all fitted classifiers
+    ----------------
+        ens: dict([key=str]:[value=list])
+            dictionary of (name, learner) tuples. The learner must have a fit method.
+        X (2D array-like or matrix-like): 
+            2D matrix of shape (n_samples, n_columns)
+        y (iterable, array-like): 
+            Label vector of shape (n_samples,)
+        save_dir (str): 
+            directory to pickle fitted algorithms
+        **kwargs: 
+            variables related to scikit-learn estimators (such as e.g. n_jobs)
+    
+    Returns:
+    ----------------
+        List(fitted scikit-learn classifiers):
+            List of fitted learners. If save_dir is a valid directory it will contain the pickled
+            versions of all fitted classifiers.
     """
+    
     if not isinstance(ens, dict):
         raise TypeError(__name__+".fit_ensemble: expect 'ens' to be a dictionary.")
     
@@ -53,25 +78,24 @@ def fit_ensemble(ens, X, y, save_dir=None):
             except:
                 raise ValueError("Could not create '%s'." % save_dir)
     
-    fitted = []
     for name, clfs in ens.items():
         total_fits = len(clfs)
         for i, clf in enumerate(clfs):            
-            fitted.append(clf.fit(X,y))            
+            clf.estimator.fit(X, y)
             try:
-                clf.predict(X[1,:])
+                clf.meta_predict(X[1,:])
             except NotFittedError as e:
                 print(repr(e))
                 # What do we want to do here? Continue or raise some exception?
             if save_dir is not None:
                 model_name = 'model_%s_%s.pkl' % (name, (i+1))
                 try:
-                    joblib.dump(clf, save_dir+model_name)
+                    joblib.dump(clf.estimator, save_dir+model_name)
                 except:
                     warnings.warn("Could not pickle '%s'." % model_name)
-            show_progress((i+1)*(100/total_fits))
+            show_progress(i, total_fits)
         print("Fitted all versions of '%s' algorithm." % name)
-    return fitted
+    return 
 
 def _generate(estimator_name, estimator_params):    
     """ Here we generate estimators to later fit. """
@@ -133,7 +157,8 @@ def _generate_grid(grid):
         raise ValueError(__name__+"._generate_grid: 'method' should be (take, sample)")
 
         
-def show_progress(p):
+def show_progress(i, total_fits):
+    p = (i+1)*(100/float(total_fits))
     sys.stdout.write('\r')
     sys.stdout.write("[%-100s] %d%%" % ('=' * int(p), p))
     sys.stdout.flush()

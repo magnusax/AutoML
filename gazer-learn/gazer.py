@@ -148,7 +148,7 @@ class GazerMetaLearner():
         if not name in self.get_names():
             raise ValueError("%s not found. Available: %s" % (name, ", ".join(self.get_names())))
         _clf = [clf for n, clf in self.clf if n == name]
-        if len(_clf) == 1:
+        if len(_clf)==1:
             return _clf[0]
         else:
             raise ValueError("No unique algorithm found: %s" % str(_clf))
