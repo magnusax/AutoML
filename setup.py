@@ -8,7 +8,7 @@ setup(
   author_email='johanmagnusaxelsson@gmail.com',
   url='https://github.com/magnusax/ml-meta-wrapper', # use the URL to the github repo
   keywords=['machine learning', 'software'], # arbitrary keywords
-  install_requires=["numpy", "scipy", "scikit-learn>=0.17", "seaborn", "skopt>=0.3"],
+  install_requires=["numpy", "scipy", "scikit-learn>=0.17", "seaborn", "scikit-optimize>=0.3"],
   license='MIT License',
   classifiers=[
     'Development Status :: 3 - Alpha',

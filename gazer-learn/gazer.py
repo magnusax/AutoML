@@ -107,10 +107,12 @@ class GazerMetaLearner():
         """ Import classifier algorithms """
         _classifiers_ = "classifiers."
         try:           
-            module = import_module(_classifiers_+module_name)
+            ####module = import_module(_classifiers_+module_name)
+            module = import_module(module_name)
         # Should prevent crashing if some library (e.g. xgboost) is missing
         except ImportError: 
-            warnings.warn("Could not import %s." % module_name)
+            sys.exit("exit: %s" % sys.exc_info()[1])
+            ###warnings.warn("Could not import %s." % module_name)
             return (None, None)            
         algorithm = getattr(module, algorithm_name)
         

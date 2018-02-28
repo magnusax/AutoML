@@ -1,8 +1,9 @@
+from __future__ import print_function
+
 import os
 import sys
 import warnings
 from copy import deepcopy
-from __future__ import print_function
 
 import numpy as np
 from scipy.stats import uniform
@@ -23,7 +24,7 @@ def ensemble_builder(X, names=None):
         X (matrix-like): 
             input 2D matrix of shape (n_samples, n_columns)
         names (iterable/array-like/list): 
-            iterble of names of algorithms to fetch from repository (optional).
+            iterble of names of algorithms to fetch from repository.
             If not set then names are read from a GazerMetaLearner object.
     
     Returns:
@@ -49,7 +50,8 @@ def fit_ensemble(ens, X, y, save_dir=None, **kwargs):
     Input:
     ----------------
         ens: dict([key=str]:[value=list])
-            dictionary of (name, learner) tuples. The learner must have a fit method.
+            dictionary of (name, learner) tuples. The learner 
+            must have a fit method.
         X (2D array-like or matrix-like): 
             2D matrix of shape (n_samples, n_columns)
         y (iterable, array-like): 
@@ -57,13 +59,14 @@ def fit_ensemble(ens, X, y, save_dir=None, **kwargs):
         save_dir (str): 
             directory to pickle fitted algorithms
         **kwargs: 
-            variables related to scikit-learn estimators (such as e.g. n_jobs)
+            variables related to scikit-learn estimators 
+            (such as e.g. n_jobs)
     
     Returns:
     ----------------
         List(fitted scikit-learn classifiers):
-            List of fitted learners. If save_dir is a valid directory it will contain the pickled
-            versions of all fitted classifiers.
+            List of fitted learners. If save_dir is a valid directory 
+            it will contain the pickled versions of all fitted classifiers.
     """
     
     if not isinstance(ens, dict):
@@ -83,7 +86,7 @@ def fit_ensemble(ens, X, y, save_dir=None, **kwargs):
         for i, clf in enumerate(clfs):            
             clf.estimator.fit(X, y)
             try:
-                clf.meta_predict(X[1,:])
+                clf.estimator.predict(X[1,:])
             except NotFittedError as e:
                 print(repr(e))
                 # What do we want to do here? Continue or raise some exception?
@@ -100,16 +103,13 @@ def fit_ensemble(ens, X, y, save_dir=None, **kwargs):
 def _generate(estimator_name, estimator_params):    
     """ Here we generate estimators to later fit. """
     
-    if isinstance(estimator_name, str):
-        item = GazerMetaLearner(method='chosen', estimators=[estimator_name])
-        clfs = item.clf
-        if len(clfs)==1:
-            _, clf = clfs[0]
-        else:
-            raise ValueError(__name__+"._generate: should only find 1 algorithm.")
+    item = GazerMetaLearner(method='chosen', estimators=[estimator_name])
+    clfs = item.clf
+    if len(clfs)==1:
+        clf = clfs[0][1]
     else:
-        raise TypeError(__name__+"._generate: expected string input. \nFound: %s" 
-                        % str(estimator_name))        
+        raise ValueError(__name__+"._generate: should only find 1 algorithm.")       
+    del item
     
     estimators_to_fit = []
     for estimator_param in estimator_params:
