@@ -6,6 +6,19 @@ The project aims to develop a customized ML framework, leveraging the power of e
 
 The project is still in its infancy, and only the bare minimum of functionality is present.
 
+Install will (shortly) be available through the python package index `pip install gazer`.
+
+The entrance to functionality is the MetaLearner object. It is initialized like so:
+    from gazer import GazerMetaLearner
+	gz = GazerMetaLearner(method='complete, verbose=1)
+Algorithms are available in the `.clf` variable
+	classifiers = gz.clf
+Assuming you have data available in the form of `X,y` data you can easily fit available algorithms 
+using default hyperparameter settings:
+	gz.meta_fit(X, y)
+
+
+
 Some ideas are currently being implemented, e.g.
 * Markov Chain Monte Carlo scheme for optimization of (very-) large ensemble models 
 for large data sets where training times are relatively long.
