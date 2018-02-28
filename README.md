@@ -1,14 +1,11 @@
 # Gazer-learn
 
-As in: "standing on the shoulders of giants, gazing at the stars"
+As in: > "standing on the shoulders of giants, gazing at the stars"
 
-The project aims to develop a customized ML framework, leveraging the power of existing popular libraries. Currently tested for python versions>=3.4. 
+The project aims to develop a customized ML framework, leveraging the power of existing popular libraries. -- Currently tested for python versions `>=3.4`. 
 
-The project is still in its infancy, and only the bare minimum of functionality is present.
-
-Install will (shortly) be available through the python package index `pip install gazer`.
-
-The entrance to functionality is the MetaLearner object. It is initialized like so:
+The project is still in its infancy, and only the bare minimum of functionality is present. But it is currently -- under active development (conditional on time and energy).
+Install will (shortly) be available through the python package index `pip install gazer`. The entrance to -- functionality is the **GazerMetaLearner** object:
     
 ```python
 from gazer import GazerMetaLearner
@@ -16,15 +13,17 @@ gz = GazerMetaLearner(method='complete, verbose=1)
 ```
 	
 Algorithms are available in the `.clf` variable
-    	
-    classifiers = gz.clf
-    	
+
+```python    	
+classifiers = gz.clf
+```
+   	
 Assuming you have data available in the form of `X,y` data you can easily fit available algorithms 
 using default hyperparameter settings:
-	
-    gz.meta_fit(X, y)
 
-
+```python	
+gz.meta_fit(X, y)
+```
 
 Some ideas are currently being implemented, e.g.
 * Markov Chain Monte Carlo scheme for optimization of (very-) large ensemble models 
