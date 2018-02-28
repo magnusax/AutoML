@@ -10,10 +10,10 @@ Install will (shortly) be available through the python package index `pip instal
 
 The entrance to functionality is the MetaLearner object. It is initialized like so:
     
-    ```python
-	from gazer import GazerMetaLearner
-    gz = GazerMetaLearner(method='complete, verbose=1)
-    ```
+```python
+from gazer import GazerMetaLearner
+gz = GazerMetaLearner(method='complete, verbose=1)
+```
 	
 Algorithms are available in the `.clf` variable
     	
