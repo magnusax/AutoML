@@ -11,8 +11,7 @@ def library_config(names, nrow, ncol):
         'bernoulli_nb': naive_bayes_lib(nrow, ncol),
         'random_forest': random_forest_lib(nrow, ncol),
         'xgboost': xgboost_lib(nrow, ncol),}
-    return [
-        (name, grid) for name, grid in library.items() 
+    return [(name, grid) for name, grid in library.items() 
         if (name in names) and (grid is not None)]
 
 def get_config(hyper_param, fixed_params, grid):
