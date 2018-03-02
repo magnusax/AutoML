@@ -11,7 +11,7 @@ under active development (conditional on time and energy).
 Install will (shortly) be available through the python package index `pip install gazer` (dev version). Currently 
 tested for python versions `>=3.4` only. 
 
-#### Using the library
+### Using the library
 The entrance to functionality is the **GazerMetaLearner** object;
     
 ```python
@@ -47,25 +47,17 @@ for large data sets where training times are relatively long.
 * Advanced ensembling techniques
   - See [these two papers from Caruana et al.](http://www.cs.cornell.edu/~caruana/ctp/ct.papers/caruana.icml04.icdm06long.pdf)
 
-Libraries which will be heavily relied upon are:
 
-### Preprocessing
-* Scikit-learn 
-* Scipy
+ML libraries which will be heavily relied upon are first and foremost:
+* (Done) Scikit-learn
+* (Done) Xgboost
+* (Tentative) Keras --> Tensorflow/Theano backend
 
-### Visualization
-* Matplotlib
-* Seaborn 
-
-### Learning and evaluation
-* Scikit-learn
-* (Tentative) Keras (Tensorflow/Theano)
-* (Tentative) Xgboost
 
 TODO: add direct links to each github project mentioned on this page, 
 to ensure that credit and recognition goes to developers
 
 
-## Comments
+### Comments
 As this project is in its initial development phase, the code has not been tested properly yet. It thus follows
 that it has not yet been uploaded to the PyPi repository yet. Project developer's contact info is available in the setup.py file. 
