@@ -1,0 +1,19 @@
+Metadata-Version: 1.1
+Name: gazer
+Version: 0.1.dev1
+Summary: Machine learning library built on top of several popular projects, e.g., scikit-learn and scikit-optimize.
+Home-page: https://github.com/magnusax/ml-meta-wrapper
+Author: Magnus Axelsson
+Author-email: johanmagnusaxelsson@gmail.com
+License: MIT License
+Description-Content-Type: UNKNOWN
+Description: UNKNOWN
+Keywords: machine learning,software
+Platform: UNKNOWN
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Developers
+Classifier: Topic :: Software Development :: Machine Learning
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3.4
+Classifier: Programming Language :: Python :: 3.5
+Classifier: Programming Language :: Python :: 3.6

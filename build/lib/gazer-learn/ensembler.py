@@ -13,29 +13,27 @@ from sklearn.exceptions import NotFittedError
 from sampling import Loguniform
 from library import library_config
 from gazer import GazerMetaLearner
-from progress import show_progress
 
 
-def build(X, names=None):
-    """ 
-    Build ensemble from base learners. 
-    If 'names' is not set then method returns an empty dictionary.
+def ensemble_builder(X, names=None):
+    """ Build ensemble from base learners. If 'names' is not set
+    then method returns an empty dictionary.
     
     Input:
-    -----------
-        X : matrix-like
+    ----------------
+        X (matrix-like): 
             input 2D matrix of shape (n_samples, n_columns)
-            
-        names : array-like
-            iterable of names of algorithms to fetch from repository.
+        names (iterable/array-like/list): 
+            iterble of names of algorithms to fetch from repository.
             If not set then names are read from a GazerMetaLearner object.
     
     Returns:
-    -----------
-        dict : (name_of_algorithm[str]: list( sklearn classifiers ))
-            Dictionary containing name keys with corresponding values being 
+    ----------------
+        dict(str(name_of_algorithm) : list(scikit-learn classifiers)):
+            Dictionary containing name-keys with corresponding values being 
             a list of possible learners with varying settings of hyperparameters.
-    """    
+    """
+    
     if names is None:
         names = GazerMetaLearner(method='complete').get_names()
         print("Possible names: %s" % ",".join(names))
@@ -44,7 +42,7 @@ def build(X, names=None):
     name_grid = library_config(names, *X.shape)
     return {name:_generate(name, grid) for name, grid in name_grid}
 
-def fit(ens, X, y, save_dir=None, **kwargs):
+def fit_ensemble(ens, X, y, save_dir=None, **kwargs):
     """ Fit an ensemble of algorithms. If 'save_dir' is set then models
     are pickled to that directory (if directory does not exist, we attempt
     to create it). Method returns a (flat) list of fitted learners.
@@ -85,15 +83,13 @@ def fit(ens, X, y, save_dir=None, **kwargs):
     
     for name, clfs in ens.items():
         total_fits = len(clfs)
-        checked = False
-        for i, clf in enumerate(clfs):
-            if not checked:
-                if hasattr(clf.estimator, 'fit'):
-                    clf.estimator.fit(X, y)
-                else:
-                    raise Exception("'fit' method required.") 
-                checked = True
-            train_score = get_score(clf.estimator.predict(X), y)
+        for i, clf in enumerate(clfs):            
+            clf.estimator.fit(X, y)
+            try:
+                clf.estimator.predict(X[1,:])
+            except NotFittedError as e:
+                print(repr(e))
+                # What do we want to do here? Continue or raise some exception?
             if save_dir is not None:
                 model_name = 'model_%s_%s.pkl' % (name, (i+1))
                 try:
@@ -107,54 +103,63 @@ def fit(ens, X, y, save_dir=None, **kwargs):
 def _generate(estimator_name, estimator_params):    
     """ Here we generate estimators to later fit. """
     
-    learner = GazerMetaLearner(method='chosen', estimators=[estimator_name])
-    clfs = learner.clf
+    item = GazerMetaLearner(method='chosen', estimators=[estimator_name])
+    clfs = item.clf
     if len(clfs)==1:
         clf = clfs[0][1]
     else:
-        raise ValueError("Should find 1 algorithm only.")       
-    del learner
+        raise ValueError(__name__+"._generate: should only find 1 algorithm.")       
+    del item
     
-    estimators = []
+    estimators_to_fit = []
     for estimator_param in estimator_params:
         param = estimator_param['param']
         premise = estimator_param['premise']
         values = _generate_grid(estimator_param['grid'])        
         for value in values:
             estimator = deepcopy(clf.estimator)
-            pars = { param:value }
+            pars = {param:value}
             pars.update(premise)
             try:
                 estimator.set_params(**pars)
             except:
-                warnings.warn("Failed to set param: %s" % param)
+                warnings.warn(__name__+"._generate: failed to set param '%s'" % param)
                 continue
-            estimators.append(estimator)
+            estimators_to_fit.append(estimator)
             del estimator                    
-    return estimators
+    return estimators_to_fit
 
 def _generate_grid(grid):
     """ Generate a config grid. """
     
     method = grid.get('method', None)
-    assert method in ('take', 'sample')
-    
     category = grid.get('category', None)        
-    assert category is not None
-        
-    if method=='take':
-        return grid['values']
     
-    elif method=='sample':                
-        low = grid['low']
-        high = grid['high']
-        grid_points = grid['numval']        
-        prior = grid['prior']
+    if method == 'take':
+        return grid.get('values', None)    
+    
+    elif method == 'sample':        
+        low = grid.get('low')
+        high = grid.get('high')
+        num = grid.get('numval')
+        prior = grid.get('prior')                
         
-        if category=='discrete':
-            raise ValueError('Discrete sampling not implemented.')                   
-        elif category=='continuous':                                  
-            if prior=='loguniform':
-                return loguniform(low=low, high=high, size=grid_points).range()
-            else:
-                return np.linspace(low, high, grid_points, endpoint=True)
+        if category == 'discrete':
+            raise ValueError('Discrete sampling not allowed yet...check if you need it.')           
+        
+        elif category == 'continuous':                       
+            if prior == 'uniform':
+                return np.linspace(low, high, num, endpoint=True)            
+            elif prior == 'loguniform':
+                logs = loguniform(low=low, high=high, size=num)
+                return logs.range()
+    else:
+        raise ValueError(__name__+"._generate_grid: 'method' should be (take, sample)")
+
+        
+def show_progress(i, total_fits):
+    p = (i+1)*(100/float(total_fits))
+    sys.stdout.write('\r')
+    sys.stdout.write("[%-100s] %d%%" % ('=' * int(p), p))
+    sys.stdout.flush()
+    return
