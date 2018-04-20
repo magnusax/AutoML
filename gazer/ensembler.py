@@ -10,10 +10,11 @@ from scipy.stats import uniform
 from sklearn.externals import joblib
 from sklearn.exceptions import NotFittedError
 
-from sampling import Loguniform
-from library import library_config
-from gazer import GazerMetaLearner
-from progress import show_progress
+from .sampling import Loguniform
+from .library import library_config
+from .gazer import GazerMetaLearner
+from .progress import show_progress
+from .metrics import get_scorer
 
 
 def build(X, names=None):
@@ -44,65 +45,79 @@ def build(X, names=None):
     name_grid = library_config(names, *X.shape)
     return {name:_generate(name, grid) for name, grid in name_grid}
 
-def fit(ens, X, y, save_dir=None, **kwargs):
-    """ Fit an ensemble of algorithms. If 'save_dir' is set then models
-    are pickled to that directory (if directory does not exist, we attempt
-    to create it). Method returns a (flat) list of fitted learners.
+def fit(ensemble, X, y, save_dir, scoring='accuracy', **kwargs):
     
-    Input:
-    ----------------
-        ens: dict([key=str]:[value=list])
-            dictionary of (name, learner) tuples. The learner 
-            must have a fit method.
-        X (2D array-like or matrix-like): 
+    """ 
+    Fit an ensemble of algorithms. If `save_dir` is set then models
+    are pickled to that directory 
+    If directory does not exist, we attempt to create it. 
+    Method returns a (flat) list of fitted learners.
+    
+    Parameters:
+    ------------
+        ensemble: dict(str:list)
+            Dictionary of (name, estimator) tuples
+                   
+        X : matrix-like
             2D matrix of shape (n_samples, n_columns)
-        y (iterable, array-like): 
+        
+        y : array-like
             Label vector of shape (n_samples,)
-        save_dir (str): 
-            directory to pickle fitted algorithms
+        
+        save_dir: str             
+            Directory to pickle fitted algorithms
+        
+        scoring : str or callable
+            Used when obtaining training data score
+            
         **kwargs: 
-            variables related to scikit-learn estimators 
-            (such as e.g. n_jobs)
+            Variables related to scikit-learn estimator's 
+            `fit` method (such as e.g. n_jobs)
     
     Returns:
-    ----------------
-        List(fitted scikit-learn classifiers):
-            List of fitted learners. If save_dir is a valid directory 
-            it will contain the pickled versions of all fitted classifiers.
-    """
+    ------------
+        List of fitted learners. 
+            If save_dir is a valid directory it will contain the 
+            pickled versions of all fitted classifiers.
+    """ 
     
-    if not isinstance(ens, dict):
-        raise TypeError(__name__+".fit_ensemble: expect 'ens' to be a dictionary.")
+    if not os.path.isdir(save_dir):
+        os.makedirs(save_dir)
     
-    if save_dir is not None:
-        if save_dir[-1]!="/":
-            save_dir += "/"        
-        if not os.path.isdir(save_dir):
-            try:
-                os.makedirs(save_dir)
-            except:
-                raise ValueError("Could not create '%s'." % save_dir)
+    # Get scorer from metrics
+    scorer = get_scorer(scoring)
     
-    for name, clfs in ens.items():
+    # Keep track of model score on train data
+    model_scores = []
+    
+    for name, clfs in ensemble.items():
         total_fits = len(clfs)
-        checked = False
-        for i, clf in enumerate(clfs):
-            if not checked:
-                if hasattr(clf.estimator, 'fit'):
-                    clf.estimator.fit(X, y)
-                else:
-                    raise Exception("'fit' method required.") 
-                checked = True
-            train_score = get_score(clf.estimator.predict(X), y)
+        
+        for i, estimator in enumerate(clfs):
+            
+            # Fit model
+            if hasattr(estimator, 'fit'):
+                estimator.fit(X, y)
+            else:
+                warnings.warn("`fit` method required") 
+                break
+                
+            # Save model
             if save_dir is not None:
                 model_name = 'model_%s_%s.pkl' % (name, (i+1))
                 try:
-                    joblib.dump(clf.estimator, save_dir+model_name)
+                    joblib.dump(estimator, os.path.join(save_dir, model_name))
                 except:
-                    warnings.warn("Could not pickle '%s'." % model_name)
+                    raise Exception("Could not pickle %s" % model_name)
+            
+            # Save score
+            model_scores.append(
+                (model_name, scorer(estimator.predict(X), y))
+            
+            # Show progress bar
             show_progress(i, total_fits)
-        print("Fitted all versions of '%s' algorithm." % name)
-    return 
+    
+    return model_scores
 
 def _generate(estimator_name, estimator_params):    
     """ Here we generate estimators to later fit. """

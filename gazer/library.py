@@ -1,6 +1,7 @@
 def library_config(names, nrow, ncol):
-    """ Provide information on how to generate ensemble """
-    
+    """
+    Provide information on how to generate ensemble 
+    """
     library = {
         'logreg': logreg_lib(nrow, ncol),
         'adaboost': adaboost_lib(nrow, ncol),
@@ -11,42 +12,48 @@ def library_config(names, nrow, ncol):
         'bernoulli_nb': naive_bayes_lib(nrow, ncol),
         'random_forest': random_forest_lib(nrow, ncol),
         'xgboost': xgboost_lib(nrow, ncol),}
-    return [(name, grid) for name, grid in library.items() 
-        if (name in names) and (grid is not None)]
+    
+    return list(
+        (name, grid) for name, grid in library.items() 
+        if (name in names) and (grid is not None))
 
 def get_config(hyper_param, fixed_params, grid):
-    return list({
-        'param':hyper_param, 
-        'config':fixed_params, 
-        'grid':grid})
+    return list(
+        {'param': hyper_param, 
+         'config': fixed_params, 
+         'grid': grid})
 
 def get_grid(category, method, values=None, prior=None, low=None, high=None, numval=None):
     """
     Generate a configuration grid used when building our ensembler.
     
     Input:
-    ---------------
-        category (str): 
+    ---------
+        category : str 
             'discrete' or 'continuous'
-        method (str):
+            
+        method : str
             'sample' or 'take'
-        values (iterable, array-like):
+            
+        values : iterable, array-like
             Used only when method=='take'. Specifies values of hyperparameter.
-        prior (str):
+            
+        prior : str
             Specifies how to sample hyperparameter ('uniform' or 'loguniform'). 
             Used when method=='sample'.
-        low (integer, float):
+            
+        low : integer or float:
             Sampling lower bound.
-        high (integer, float):
+            
+        high : integer or float
             Sampling upper bound.
-        numval (integer):
+            
+        numval : integer
             Number of values to sample.
             
     Returns:
-    ---------------    
-        dict[category:str, method:str, values:list()]
-        or
-        dict[category:str, method:str, prior:str, low:(int,float), high:(int,float), numval:int)]
+    ---------    
+        Dictionary with conditional keys
     """
     if not category in ('discrete', 'continuous'):
         raise Exception("Invalid 'category' argument.")
