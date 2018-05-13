@@ -9,12 +9,13 @@ import numpy as np
 from scipy.stats import uniform
 from sklearn.externals import joblib
 from sklearn.exceptions import NotFittedError
+from sklearn.metrics import get_scorer
 
 from .sampling import Loguniform
+from .progress import show_progress
 from .library import library_config
 from .gazer import GazerMetaLearner
-from .progress import show_progress
-from .metrics import get_scorer
+
 
 
 def build(X, names=None):
@@ -22,8 +23,9 @@ def build(X, names=None):
     Build ensemble from base learners. 
     If 'names' is not set then method returns an empty dictionary.
     
-    Input:
+    Parameters:
     -----------
+
         X : matrix-like
             input 2D matrix of shape (n_samples, n_columns)
             
@@ -32,22 +34,25 @@ def build(X, names=None):
             If not set then names are read from a GazerMetaLearner object.
     
     Returns:
-    -----------
-        dict : (name_of_algorithm[str]: list( sklearn classifiers ))
+    ---------
+
+        dict : (name_of_algorithm[str]: list(sklearn classifiers))
             Dictionary containing name keys with corresponding values being 
             a list of possible learners with varying settings of hyperparameters.
     """    
+    
     if names is None:
         names = GazerMetaLearner(method='complete').get_names()
         print("Possible names: %s" % ",".join(names))
-        return {}
+        return
     
-    name_grid = library_config(names, *X.shape)
-    return {name:_generate(name, grid) for name, grid in name_grid}
+    lib = library_config(names, *X.shape)
+
+    return { name: _generate(name, grid) for name, grid in lib }
+
 
 def fit(ensemble, X, y, save_dir, scoring='accuracy', **kwargs):
-    
-    """ 
+    """
     Fit an ensemble of algorithms. If `save_dir` is set then models
     are pickled to that directory 
     If directory does not exist, we attempt to create it. 
@@ -55,6 +60,7 @@ def fit(ensemble, X, y, save_dir, scoring='accuracy', **kwargs):
     
     Parameters:
     ------------
+        
         ensemble: dict(str:list)
             Dictionary of (name, estimator) tuples
                    
@@ -69,13 +75,15 @@ def fit(ensemble, X, y, save_dir, scoring='accuracy', **kwargs):
         
         scoring : str or callable
             Used when obtaining training data score
+            Fetches get_scorer() from sklearn.metrics
             
         **kwargs: 
             Variables related to scikit-learn estimator's 
             `fit` method (such as e.g. n_jobs)
     
     Returns:
-    ------------
+    ---------
+
         List of fitted learners. 
             If save_dir is a valid directory it will contain the 
             pickled versions of all fitted classifiers.
@@ -104,7 +112,7 @@ def fit(ensemble, X, y, save_dir, scoring='accuracy', **kwargs):
                 
             # Save model
             if save_dir is not None:
-                model_name = 'model_%s_%s.pkl' % (name, (i+1))
+                model_name = 'model_%s%s.pkl' % (name, (i+1))
                 try:
                     joblib.dump(estimator, os.path.join(save_dir, model_name))
                 except:
@@ -118,6 +126,7 @@ def fit(ensemble, X, y, save_dir, scoring='accuracy', **kwargs):
             show_progress(i, total_fits)
     
     return model_scores
+
 
 def _generate(estimator_name, estimator_params):    
     """ Here we generate estimators to later fit. """
@@ -147,6 +156,7 @@ def _generate(estimator_name, estimator_params):
             estimators.append(estimator)
             del estimator                    
     return estimators
+
 
 def _generate_grid(grid):
     """ Generate a config grid. """
