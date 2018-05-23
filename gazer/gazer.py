@@ -38,14 +38,14 @@ class GazerMetaLearner():
 
         method : str,  default, 'random'
             random; choose num_sample random classifiers
-            complete;  choose all available classifiers,
-            chosen; send in ant iterable of classifier names
+            all;  choose all available classifiers,
+            selected; send in ant iterable of classifier names
                       
         num_sample : integer, default: 3
             choose number of classifiers to sample. Used when method = 'random'
        
         estimators : None or list-like, default: None
-            Send a list of classifiers to initialize. Used when method = 'chosen'
+            Send a list of classifiers to initialize. Used when method = 'selected'
 
         base_estimator: None or sklearn estimator, default: None 
             Decide which classifier to use as a weak learner for ensemble methods
@@ -62,13 +62,13 @@ class GazerMetaLearner():
     
     """
     def __init__(self, method='random', num_sample=3, estimators=None, 
-                 base_estimator=None, exclude=None, verbose=0, random_state=None):                    
+                     base_estimator=None, exclude=None, verbose=0, random_state=None):                    
         
-        options = ('random', 'complete', 'chosen')
+        options = ('random', 'all', 'selected')
         if method not in options:
-            raise ValueError("'method' should be one of (%s)" % ", ".join(options))                
+            raise ValueError("'method' should be one of (%s)" % ",".join(options))                
         
-        if method=='chosen' and (estimators is None or len(estimators)==0):
+        if method=='selected' and (estimators is None or len(estimators)==0):
             names = self._build_classifier_dict().keys()
             raise ValueError("Specify name of at least one algorithm in 'estimators'. "\
                              "\nValid options: (%s)" % ", ".join(names))
@@ -92,7 +92,7 @@ class GazerMetaLearner():
         else:
             self.exclude = exclude
         
-        if method=='chosen':
+        if method=='selected':
             self.clf = {n:c for n,c in self._build_classifier_repository() if n in estimators}
         else:
             self.clf = self._build_classifier_dict()    
