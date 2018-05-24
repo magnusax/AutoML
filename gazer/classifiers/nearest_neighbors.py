@@ -1,6 +1,6 @@
 from scipy.stats import randint
 from sklearn.neighbors import KNeighborsClassifier
-from base import BaseClassifier
+from ..base import BaseClassifier
 
 
 class MetaKNearestNeighborClassifier(BaseClassifier):
@@ -12,7 +12,7 @@ class MetaKNearestNeighborClassifier(BaseClassifier):
     
     def __init__(self, n_neighbors=5, weights='uniform', algorithm='auto', leaf_size=30, p=2, metric='minkowski'):
         
-        self.name = "nearestneigbors"
+        self.name = "knn"
         self.max_n_iter = 1000
         
         self.init_params = {}

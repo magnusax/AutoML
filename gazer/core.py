@@ -6,49 +6,43 @@ import sys
 from importlib import import_module  
 from operator import itemgetter
 
-import seaborn as sns
-from matplotlib import pyplot as plt
-
 from skopt import gp_minimize
 from sklearn.preprocessing import LabelBinarizer
 from sklearn.model_selection import cross_val_score, RandomizedSearchCV
-from sklearn.metrics import accuracy_score, roc_auc_score, f1_score, \
-                            recall_score, precision_score, log_loss, \
-                            matthews_corrcoef as mcc
+from sklearn.metrics import get_scorer
 
-        
-from utils import skopt_space_mapping 
-from base import EnsembleBaseClassifier, BaseClassifier
-from algorithms import all_algorithms
+from .base import EnsembleBaseClassifier, BaseClassifier
+from .algorithms import all_algorithms        
+from .utils import skopt_space_mapping
 
 
 
 class GazerMetaLearner():
     """
-    Class that keeps track of available classifiers and implements functionality around them    
+    Class that keeps track of available classifiers 
+    and implements functionality around them    
     
-    Import:
-    --------
-
-    from gazer import GazerMetaLearner
-    learner = GazerMetaLearner()    
+    ::: Importing :::
+    from gazer.core import GazerMetaLearner
+    learner = GazerMetaLearner()     
+    
     
     Input:
     --------
-
+    
         method : str,  default, 'random'
             random; choose num_sample random classifiers
             all;  choose all available classifiers,
-            selected; send in ant iterable of classifier names
+            selected; send in an iterable of classifier names (arg: `estimators`)
                       
         num_sample : integer, default: 3
-            choose number of classifiers to sample. Used when method = 'random'
+            choose number of classifiers to sample. Used when method='random'
        
         estimators : None or list-like, default: None
-            Send a list of classifiers to initialize. Used when method = 'selected'
+            Send a list of classifiers to initialize. Used when method='selected'
 
         base_estimator: None or sklearn estimator, default: None 
-            Decide which classifier to use as a weak learner for ensemble methods
+            Decide which classifier to use as a weak learner when using ensembles
        
         verbose : integer, default: 0 
             If verbose>0 then output feedback messages       
@@ -56,22 +50,24 @@ class GazerMetaLearner():
     Returns:
     ---------
 
-        GazerMetaLearner object : 
-            See GazerMetaLearner().clf for a list of initialized learning algorithms  
-            consisting of (name, estimator) tuples
+        GazerMetaLearner : class instance 
+            See GazerMetaLearner().clf for a dictionary of initialized learning algorithms  
+            consisting of algorithm-name keys with MetaClassifier objects as values
     
     """
-    def __init__(self, method='random', num_sample=3, estimators=None, 
-                     base_estimator=None, exclude=None, verbose=0, random_state=None):                    
+    def __init__(self, 
+                 method='random', 
+                 num_sample=3, 
+                 estimators=None, 
+                 base_estimator=None, 
+                 exclude=None, 
+                 verbose=0, 
+                 random_state=None):                    
         
         options = ('random', 'all', 'selected')
-        if method not in options:
-            raise ValueError("'method' should be one of (%s)" % ",".join(options))                
         
-        if method=='selected' and (estimators is None or len(estimators)==0):
-            names = self._build_classifier_dict().keys()
-            raise ValueError("Specify name of at least one algorithm in 'estimators'. "\
-                             "\nValid options: (%s)" % ", ".join(names))
+        if method not in options:
+            raise ValueError("`method` should be one of (%s)" % ",".join(options))                 
         
         self.verbose = verbose   
         self.method = method
@@ -87,6 +83,11 @@ class GazerMetaLearner():
         # It will override defaults in the individual init scripts
         self.base_estimator = base_estimator
         
+        if method=='selected' and (estimators is None or len(estimators)==0):
+            raise Exception(
+                "Specify name of at least one algorithm in `estimators`."\
+                " Valid options are:\n%s" % ", ".join(self._build_classifier_dict().keys()))
+                
         if exclude is None:
             self.exclude = []
         else:
@@ -98,8 +99,7 @@ class GazerMetaLearner():
             self.clf = self._build_classifier_dict()    
         self.clf = {n:c for n,c in self.clf.items() if not (n in self.exclude)}               
         
-        if self.verbose>0:    
-            print("Initialized: %s" % ", ".join(self.names))         
+        if self.verbose>0: print("Initialized: %s" % ", ".join(self.names))         
     
 
     @property
@@ -127,21 +127,19 @@ class GazerMetaLearner():
 
 
     def _add_algorithm(self, module_name, algorithm_name):                     
-        """ Import classifier algorithms """
-        _classifiers_ = "classifiers."
+        """ Import classifier algorithms 
+        """        
+        module_path = ".".join((__package__, "classifiers", module_name))        
         try:           
-            ####module = import_module(_classifiers_+module_name)
-            module = import_module(module_name)
-        # Should prevent crashing if some library (e.g. xgboost) is missing
+            module = import_module(module_path, package=True)
         except ImportError: 
-            sys.exit("exit: %s" % sys.exc_info()[1])
-            ###warnings.warn("Could not import %s." % module_name)
-            return (None, None)            
-        algorithm = getattr(module, algorithm_name)
-        
+            warnings.warn("Could not import module %s: \n%s" 
+                          % (module_name, sys.exc_info()[1]))
+            return (None, None)                   
+        algorithm = getattr(module, algorithm_name)        
         if issubclass(algorithm, EnsembleBaseClassifier):
             instance = algorithm(base_estimator=self.base_estimator, 
-                                 random_state=self.random_state)
+                                 random_state=self.random_state)            
         elif issubclass(algorithm, BaseClassifier):
             if hasattr(algorithm(), 'random_state'):
                 instance = algorithm(random_state=self.random_state)
@@ -156,7 +154,8 @@ class GazerMetaLearner():
             st = time.time()
             cl.estimator.fit(X, y)
             if self.verbose > 0:
-                print("%s trained (time: %.2f min)" % (name, (time.time()-st)/60.))
+                print("%s trained (time: %.2f min)" 
+                      % (name, (time.time()-st)/60.))
         return self
 
     
@@ -168,9 +167,11 @@ class GazerMetaLearner():
             raise        
         return self
     
+    
     def _get_algorithm(self, name):
         if not name in self.names:
-            raise ValueError("%s not found. Available: %s" % (name, ", ".join(self.names)))
+            raise ValueError("%s not found. Available: %s" 
+                             % (name, ", ".join(self.names)))
         clf_ = [clf for n, clf in self.clf if n==name]
         if len(clf_)==1:
             return clf_[0]
@@ -195,21 +196,25 @@ class GazerMetaLearner():
         """
         Evalute predictions (preds) against ground truth (y_true) using scikit-learn metrics
  
-       Input:
-       -------
+        Input:
+        -------
 
-            preds :       
-                a list of (name (str), array-of-predictions (iterable)) tuples (default output from 'predict' method)
-                e.g. [('my_classifier1', np.array(...)), ('my_classifier2', np.array(...)), ...]  
-            
-            y_true :      
-                an array (iterable) of ground truth labels
-            
-            metric :      
-                a label (str) that indicates type of metric to use (accuracy, auc, f1, recall, precision, log_loss). Must be set.
-        
-            multiclass :  
-                True or False. Indicate if this is a multiclass problem or not. Must be set.
+        preds :       
+            a list of (name (str), array-of-predictions (iterable)) tuples 
+            (default output from 'predict' method)
+            E.g.: [('my_classifier1', np.array(...)), ('my_classifier2', np.array(...)), ... ]  
+
+        y_true :      
+            an array (iterable) of ground truth labels
+
+        metric :      
+            a label (str) that indicates type of metric to use 
+            (accuracy, auc, f1, recall, precision, log_loss). 
+            Must be set.
+
+        multiclass :  
+            True or False. Indicate if this is a multiclass problem or not. 
+            Must be set.
         
         Output:
         --------
@@ -222,46 +227,48 @@ class GazerMetaLearner():
             raise ValueError("Please specify a metric")
         
         if multiclass is None:
-            raise ValueError("Please specify if multiclass or not")
-            
-        # List of supported metric names and the corresponding method (tuples)
-        metrics = [('accuracy', accuracy_score),
-                   ('auc', roc_auc_score),
-                   ('f1', f1_score),
-                   ('recall', recall_score),
-                   ('precision', precision_score),
-                   ('log_loss', log_loss),]
+            raise ValueError("Please specify if multiclass or not (bool)")
         
-        metrics_names = [f for f, _ in metrics]
+        # Desired scorer
+        scorer = get_scorer(metric)
         
-        if not metric in metrics_names:
-            raise ValueError("'metric' should be one of the following: '%s'" % ", ".join(metrics_names))
+        # We need the log loss as well
+        log_loss = get_scorer('log_loss')
         
-        scorer = [sc for name, sc in metrics if name == metric][0]
-        
+        # Keep track of score for every algorithm
         scores = []
         for name, y_pred in preds:
-            val = scorer(y_true, y_pred)
+            score_ = scorer(y_true, y_pred)
+            
             if multiclass and len(np.array(y_pred).shape) == 1:
                 lb = LabelBinarizer()
-                yhat = lb.fit_transform(y_pred)
+                y_hat = lb.fit_transform(y_pred)
             else:
-                yhat = np.array(y_pred)
-            loss = log_loss(y_true, yhat)            
-            scores.append((name, val, loss))                        
+                y_hat = np.array(y_pred)
+            lg_loss_ = log_loss(y_true, y_hat)
+            
+            scores.append((name, score_, lg_loss_))                        
+        
         scores.sort(key=itemgetter(1), reverse=True)
         
         if self.verbose>0:
-            for name, met, loss in scores: print("log_loss: %.4f \t %s: %.4f \t %s" % (loss, metric, met, name))
+            for name, score, lg_loss in scores: 
+                print("---- %s ---- \n\tLog-loss: %.4f \n\tScore: %.4f" 
+                      % (name, lg_loss, score))
         return scores
     
 
-    def crossval_optimize(self, X, y, n_iter=12, scoring='accuracy', cv=10, n_jobs=1, 
-                          sample_hyperparams=False, min_hyperparams=None, get_hyperparams=False, random_state=None):
+    def crossval_optimize(self, X, y, n_iter=12, scoring='accuracy', cv=10, 
+                          n_jobs=1, sample_hyperparams=False, 
+                          min_hyperparams=None, get_hyperparams=False, random_state=None):
+        
         """
-        This method is a wrapper to cross validation using RandomizedSearchCV from scikit-learn, wherein we optimize each defined algorithm
-        Default behavior is to optimize all parameters available to each algorithm, but it is possible to sample (randomly) a subset of them
-        to optimize (sample_hyperparams=True), or to choose a set of parameters (get_hyperparams=True).
+        This method is a wrapper to cross validation using RandomizedSearchCV from scikit-learn, 
+        wherein we optimize each defined algorithm
+        
+        Default behavior is to optimize all parameters available to each algorithm, but it is 
+        possible to sample (randomly) a subset of them to optimize (sample_hyperparams=True), 
+        or to choose a set of parameters (get_hyperparams=True).
         
         Parameters:
         ------------
@@ -298,7 +305,6 @@ class GazerMetaLearner():
         
         Ouput:
         -------
-
         List containing (classifier name, most optimized classifier) tuples       
         
         """
@@ -341,9 +347,10 @@ class GazerMetaLearner():
                     print("'%s' \tSearch time: %.2f min. \tBest score: %.5f" 
                           % (clf_name, (time.time()-start_time)/60., random_search.best_score_))
                     print("="*50)
-        return [
-            _random_grid_search(i, clf, name, param) 
-            for name, clf in self.clf.items() for i, param in enumerate(clf.cv_params)]
+                    
+        return [_random_grid_search(i, clf, name, param) 
+                for name, clf in self.clf.items() 
+                for i, param in enumerate(clf.cv_params)]
 
 
     def bayes_optimize(self, X, y, n_calls=50, scoring='accuracy', greater_is_better=True, cv=10, n_jobs=1, random_state=None):

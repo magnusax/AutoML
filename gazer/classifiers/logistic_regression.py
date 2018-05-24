@@ -1,10 +1,10 @@
 import sys
 import numpy as np
 from scipy.stats import randint, uniform
-from sampling import Loguniform
 from sklearn.linear_model import LogisticRegression
-from base import BaseClassifier
 
+from ..base import BaseClassifier
+from ..sampling import Loguniform
 
 class MetaLogisticRegressionClassifier(BaseClassifier):
     """

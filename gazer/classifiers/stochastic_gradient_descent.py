@@ -1,7 +1,7 @@
 from scipy.stats import uniform
-from sampling import Loguniform
-from base import BaseClassifier
 from sklearn.linear_model import SGDClassifier
+from ..sampling import Loguniform
+from ..base import BaseClassifier
 
 
 class MetaSGDClassifier(BaseClassifier):

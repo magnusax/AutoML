@@ -1,10 +1,9 @@
 import numpy as np
 from scipy.stats import randint, uniform
-
 from xgboost import XGBClassifier
+from ..sampling import Loguniform
+from ..base import BaseClassifier
 
-from sampling import Loguniform
-from base import BaseClassifier
 
 class MetaXGBoostClassifier(BaseClassifier):
     """

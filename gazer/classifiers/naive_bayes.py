@@ -2,7 +2,7 @@ from scipy.stats import uniform
 from sklearn.naive_bayes import GaussianNB
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.naive_bayes import BernoulliNB
-from base import BaseClassifier
+from ..base import BaseClassifier
 
 
 class MetaGaussianNBayesClassifier(BaseClassifier):

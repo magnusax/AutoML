@@ -1,4 +1,4 @@
-from base import BaseClassifier
+from ..base import BaseClassifier
 from scipy.stats import randint
 from sklearn.ensemble import RandomForestClassifier
     
