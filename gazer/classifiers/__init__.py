@@ -7,3 +7,15 @@ from .rbm_neural_net import *
 from .stochastic_gradient_descent import *
 from .svm import *
 from .xgb import *
+
+__all__ = ['MetaAdaBoostClassifier', 
+           'MetaKNearestNeighborClassifier', 
+           'MetaLogisticRegressionClassifier',
+           'MetaSGDClassifier',
+           'MetaGaussianNBayesClassifier',
+           'MetaMultinomialNBayesClassifier',
+           'MetaBernoulliNBayesClassifier',
+           'MetaRandomForestClassifier',
+           'MetaSVMClassifier',
+           'MetaXGBoostClassifier'
+          ]

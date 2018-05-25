@@ -12,7 +12,7 @@ from sklearn.model_selection import cross_val_score, RandomizedSearchCV
 from sklearn.metrics import get_scorer
 
 from .base import EnsembleBaseClassifier, BaseClassifier
-from .algorithms import all_algorithms        
+from .algorithms import implemented        
 from .utils import skopt_space_mapping
 
 
@@ -107,22 +107,27 @@ class GazerMetaLearner():
         return list(self.clf.keys())
     
 
-    def _build_classifier_dict(self):        
+    def _build_classifier_dict(self):
+        # Build repo
         clfs = self._build_classifier_repository()        
+        
+        # Do we need to downsample?
         if self.method=='random':
-            if self.verbose>0:
-                print("Sampling %i algorithms" % self.num_sample)
+            if self.verbose>0: print("Sampling %i algorithms" % self.num_sample)
             clfs = [clfs[i] for i in np.random.choice(len(clfs), self.num_sample, replace=False)]        
         return {n:c for n,c in clfs}
         
     
     def _build_classifier_repository(self):
+        # Read implemented algorithms (algorithms.py)
+        to_add = implemented()
+        
+        # Iteratively loop and check status, then add
         algorithms = []       
-        added = all_algorithms()
-        for m, c in added:
+        for m, c in to_add:
             name, algo = self._add_algorithm(m, c)
             if name is not None and algo is not None:
-                algorithms.append((name, algo))
+                algorithms.append((name, algo))  
         return algorithms
 
 
@@ -135,7 +140,8 @@ class GazerMetaLearner():
         except ImportError: 
             warnings.warn("Could not import module %s: \n%s" 
                           % (module_name, sys.exc_info()[1]))
-            return (None, None)                   
+            return (None, None)
+        
         algorithm = getattr(module, algorithm_name)        
         if issubclass(algorithm, EnsembleBaseClassifier):
             instance = algorithm(base_estimator=self.base_estimator, 
@@ -148,14 +154,32 @@ class GazerMetaLearner():
         return instance.name, instance
 
     
-    def fit(self, X, y, n_jobs=1):
+    def fit(self, X, y, n_jobs=1, **kwargs):
+        """ 
+        Parameters:
+        ------------
+            X : numpy matrix, pandas DataFrame, 2D numpy array
+                Training data.
+                
+            y : numpy array, iterable
+                Training labels.
+                
+            n_jobs : integer, optional, default: 1
+                Perform parallel computation if implemented in algorithm.
+            
+            kwargs : dict, optional
+                Other variables you wish to send to the `fit` method.
+                
+        Fit initialized algorithms.
+        
+        """
         for name, cl in self.clf.items():
-            cl.estimator.set_params(**{'n_jobs': n_jobs})
+            if hasattr(cl.estimator, 'n_jobs') and n_jobs>1:
+                cl.estimator.set_params(**{'n_jobs': n_jobs})
             st = time.time()
-            cl.estimator.fit(X, y)
+            cl.estimator.fit(X, y, **kwargs)
             if self.verbose > 0:
-                print("%s trained (time: %.2f min)" 
-                      % (name, (time.time()-st)/60.))
+                print("%s trained (time: %.2f min)" % (name, (time.time()-st)/60.))
         return self
 
     
@@ -170,8 +194,7 @@ class GazerMetaLearner():
     
     def _get_algorithm(self, name):
         if not name in self.names:
-            raise ValueError("%s not found. Available: %s" 
-                             % (name, ", ".join(self.names)))
+            raise ValueError("%s not found." % name)
         clf_ = [clf for n, clf in self.clf if n==name]
         if len(clf_)==1:
             return clf_[0]

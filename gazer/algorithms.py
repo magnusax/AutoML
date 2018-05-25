@@ -1,14 +1,23 @@
 """
-This module provides an overview, and collects all implemented base classifiers 
-(mostly from scikit-learn). But this module will contain classifiers from all
-possible sources, eventually.
+This module provides an overview and collects all implemented base classifiers 
+(mostly from scikit-learn). But this module will eventually contain classifiers 
+from several possible sources.
+
+The `core` module uses the below function when importing algorithms into its 
+library.
+
+To add a new algorithm simply add a new line describing the file and the class
+of the new classifier: ('file_name', 'name_of_meta_class')
 
 """
 
-def all_algorithms():
+def implemented():
+    """ 
+    Hard coded list of algorithms 
+    """
     
-    # Hard coded list of algorithms
-    implemented = [
+    algorithms_ = [
+    
         ('adaboost', 'MetaAdaBoostClassifier'), 
         ('nearest_neighbors', 'MetaKNearestNeighborClassifier'), 
         ('logistic_regression', 'MetaLogisticRegressionClassifier'),
@@ -20,4 +29,4 @@ def all_algorithms():
         ('svm', 'MetaSVMClassifier'),
         ('xgb', 'MetaXGBoostClassifier'),
     ]    
-    return implemented
+    return algorithms_
