@@ -8,10 +8,14 @@ from sklearn.kernel_approximation import Nystroem
 
 class MetaSVMClassifier(BaseClassifier):
 
-    def __init__(self, alpha=0.0001, fit_intercept=True, penalty='l2', n_iter=5, learning_rate='optimal', 
-                 kernel='rbf', gamma=None, coef0=1, degree=3, kernel_params=None, n_components=100, random_state=None):
+    def __init__(self, alpha=0.0001, fit_intercept=True, penalty='l2', n_iter=5, 
+                 learning_rate='optimal', kernel='rbf', gamma=None, coef0=1, degree=3, 
+                 kernel_params=None, n_components=100, random_state=None):
         """
-        In some cases we are cheating: we emulate e.g. an RBF kernel by using a kernel approximation on the input data.        
+        In a way we are cheating: we emulate e.g. an RBF kernel by using 
+        a kernel approximation on the input data. This is done in order to
+        avoid training too long.
+        
         """
         
         # Meta data

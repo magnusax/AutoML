@@ -7,9 +7,10 @@ from ..base import BaseClassifier
 class MetaSGDClassifier(BaseClassifier):
 
     # Use the defaults from scikit-learn package
-    def __init__(self, loss='hinge', penalty='l2', alpha=0.0001, l1_ratio=0.15, fit_intercept=True, n_iter=5, learning_rate='optimal', random_state=None):
+    def __init__(self, loss='hinge', penalty='l2', alpha=0.0001, l1_ratio=0.15, 
+                 fit_intercept=True, n_iter=5, learning_rate='optimal', random_state=None):
         
-        self.name = "sgd_%s_loss" % str(loss)
+        self.name = "sgd_%s" % str(loss)
         self.max_n_iter = 1000
         
         self.init_params = {}
@@ -37,7 +38,8 @@ class MetaSGDClassifier(BaseClassifier):
         return {'does_classification': True,
                 'does_multiclass': True,
                 'does_regression': False, 
-                'predict_probas': hasattr(self.estimator, 'predict_proba')}
+                'predict_probas': 
+                    hasattr(self.estimator, 'predict_proba')}
     
     def adjust_params(self, par):
          return super().adjust_params(par)
@@ -46,11 +48,10 @@ class MetaSGDClassifier(BaseClassifier):
         return super().set_tune_params(params, num_params, mode, keys)    
     
     def _set_cv_params(self):
-        """
-        Dictionary containing all trainable parameters
+        """ Dictionary containing all trainable parameters """
         
-        """
-        # Trainable params available in self.cv_params[i].keys() for i in len(self.cv_params)
+        # Trainable params available in: 
+        # self.cv_params[i].keys() for i in len(self.cv_params)
         return [
              {'penalty': ['l1', 'l2'],
               'alpha': Loguniform(low=1e-7, high=1e+7), 
@@ -65,5 +66,4 @@ class MetaSGDClassifier(BaseClassifier):
               'fit_intercept': [True, False],
               'class_weight': ['balanced', None],
               'n_iter': [5, 10, 25, 50, 100],
-              'learning_rate': ['optimal'] }  
-             ]
+              'learning_rate': ['optimal'] } ]
