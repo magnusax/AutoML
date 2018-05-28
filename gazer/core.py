@@ -154,10 +154,11 @@ class GazerMetaLearner():
         return instance.name, instance
 
     
-    def fit(self, X, y, n_jobs=1, **kwargs):
+    def fit(self, X, y, n_jobs=1):
         """ 
         Parameters:
         ------------
+        
             X : numpy matrix, pandas DataFrame, 2D numpy array
                 Training data.
                 
@@ -166,20 +167,24 @@ class GazerMetaLearner():
                 
             n_jobs : integer, optional, default: 1
                 Perform parallel computation if implemented in algorithm.
-            
-            kwargs : dict, optional
-                Other variables you wish to send to the `fit` method.
-                
+                            
         Fit initialized algorithms.
         
         """
-        for name, cl in self.clf.items():
-            if hasattr(cl.estimator, 'n_jobs') and n_jobs>1:
-                cl.estimator.set_params(**{'n_jobs': n_jobs})
+        for name, clf in self.clf.items():
             st = time.time()
-            cl.estimator.fit(X, y, **kwargs)
+            
+            # The neural network module needs to be treated separately
+            # and so has its own `fit` method implemented
+            if hasattr(clf, 'fit'):
+                clf.fit(X, y)
+            else:
+                if hasattr(clf.estimator, 'n_jobs') and n_jobs>1:
+                    clf.estimator.set_params(**{'n_jobs': n_jobs})
+                clf.estimator.fit(X, y)
+            
             if self.verbose > 0:
-                print("%s trained (time: %.2f min)" % (name, (time.time()-st)/60.))
+                print("%s training time: %.2f min" % (name, (time.time()-st)/60.))
         return self
 
     

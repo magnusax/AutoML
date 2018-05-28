@@ -13,7 +13,7 @@ from keras.layers import (Activation,
 class MetaNeuralNetworkClassifier(BaseClassifier):
     
     def __init__(self, epochs=10, batch_size=16, optimizer='adam', 
-                 learning_rate=1e-4, n_hidden=2, p=0.1):
+                 learning_rate=1e-4, n_hidden=2, p=0.1, decay_units=False, input_units=250):
     
         """
         Parameters:
@@ -38,6 +38,13 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
                 Specify dropout rate if applicable. 
                 Only takes effect when 'dropout' is set to True in network dict.
                 
+            decay_units : boolean, default: False
+                If False then keep the number of units constant at the value given by 'input_units'.
+                If True then decay the number of units by a factor of 2 from layer to layer.
+                
+            input_units : integer, default: 250
+                The number of units (neurons) to use in the input layer.
+                
         """
         # We need to know the shape of the data, and the number of classes
         # We need to set these before constructing the network
@@ -51,15 +58,20 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
         self.network['lr'] = learning_rate
         
         # Specify architecture
-        self.network['n_hidden'] = n_hidden       
-        self.network['units'] = [100] * (n_hidden+1)
+        self.network['n_hidden'] = n_hidden
         self.network['activation'] = ['relu'] * (n_hidden+1)
         self.network['batchnorm'] = [False] * (n_hidden+1)
-        self.network['dropout'] = [0.1] * (n_hidden+1)
+        self.network['dropout'] = [True] * (n_hidden+1)
         self.network['p'] = p
-        
-        self.ready = False
+        if self.decay_units:
+            self.network['units'] = [int(input_units//2**i) 
+                                     for i in range(n_hidden+1)]
+        else:
+            self.network['units'] = [input_units] * (n_hidden+1)
+            
+        # Estimator is yet to be defined at this stage
         self.estimator = None
+        self.ready = False
     
     
     def get_info(self):
@@ -129,7 +141,7 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
         """ 
         Perform training on X% (X<<100) of the training data to check that 
         we can include the algorithm without having to wait for a very long 
-        time to finish tranining on the full dataset.
+        time to finish training on the full dataset.
         """
         
         # We cap the size of the training fraction
@@ -145,7 +157,7 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
                                     % (100*train_size, total_time/60.))
         
         
-    def fit(self, X, y, **kwargs):
+    def fit(self, X, y):
         
         # We keep a local copy of the labels 
         # to avoid modifying the original input data
@@ -164,8 +176,9 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
         # Define estimator
         self.estimator = self._get_clf()
         # Fit estimator
-        self.estimator.fit(X, y_, batch_size=self.network['batch_size'], 
-                           epochs=self.network['epochs'], **kwargs)     
+        self.estimator.fit(X, y_, 
+                           batch_size=self.network['batch_size'], 
+                           epochs=self.network['epochs'])     
         
         
     def _set_cv_params(self):
