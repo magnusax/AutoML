@@ -179,12 +179,12 @@ class GazerMetaLearner():
             if hasattr(clf, 'fit'):
                 clf.fit(X, y)
             else:
-                if hasattr(clf.estimator, 'n_jobs') and n_jobs>1:
+                if n_jobs>1 and hasattr(clf.estimator, 'n_jobs'):
                     clf.estimator.set_params(**{'n_jobs': n_jobs})
                 clf.estimator.fit(X, y)
             
             if self.verbose > 0:
-                print("%s training time: %.2f min" % (name, (time.time()-st)/60.))
+                print("%s: training time=%.2f (min)" % (name, (time.time()-st)/60.))
         return self
 
     
@@ -193,19 +193,17 @@ class GazerMetaLearner():
         try:
             clf.adjust_params(params)
         except AttributeError:
-            raise        
+            raise Exception(
+                "Could not adjust params: %s" 
+                % sys.exc_info()[1])
         return self
     
     
     def _get_algorithm(self, name):
         if not name in self.names:
             raise ValueError("%s not found." % name)
-        clf_ = [clf for n, clf in self.clf if n==name]
-        if len(clf_)==1:
-            return clf_[0]
-        else:
-            raise ValueError("No unique algorithm found: %s" % str(clf_))
-    
+        return self.clf.get(name, None)
+
 
     def predict(self, X):
         return [(name, clf.estimator.predict(X)) for name, clf in self.clf.items()]

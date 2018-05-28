@@ -4,6 +4,7 @@ import warnings
 import numpy as np
 
 import keras
+from keras.callbacks import LearningRateScheduler
 from keras.models import Sequential
 from keras.layers import (Activation, 
                           BatchNormalization, 
@@ -12,32 +13,40 @@ from keras.layers import (Activation,
 
 class MetaNeuralNetworkClassifier(BaseClassifier):
     
-    def __init__(self, epochs=10, batch_size=16, optimizer='adam', 
-                 learning_rate=1e-4, n_hidden=2, p=0.1, decay_units=False, input_units=250):
+    def __init__(self, epochs=10, batch_size=16, optimizer='adam', learning_rate=1e-4, 
+                 n_hidden=2, p=0.1, dropout=True, batch_norm=False, decay_units=False, input_units=250):
     
         """
         Parameters:
         ------------
         
             epochs : integer, default: 10
-                The number of epochs to train for
+                The number of epochs to train for.
                 
             batch_size : integer, default: 16
-                Batch size 
+                Batch size used in the fit method.
                 
             optimizer : string or keras callable. Default: 'adam'
-                The optimizer to use when compiling
+                The optimizer to use when compiling.
                 
             learning_rate : float, default: 1e-4
                 Specify learning rate if applicable. 
                 
             n_hidden : integer, default: 2
-                Specify the number of hidden dense layers
+                Specify the number of hidden dense layers.
                 
             p : float, default: 0.1
                 Specify dropout rate if applicable. 
-                Only takes effect when 'dropout' is set to True in network dict.
+                Only takes effect when 'dropout' is set to True.
+            
+            dropout : Boolean or list of booleans. Default: True.
+                If providing a list: it must be of length n_hidden+1
+                This parameter specifies the dropout per layer with rate given by 'p' (constant).
                 
+            batch_norm : Boolean or list of booleans. Default: False
+                If providing a list: it must be of length n_hidden+1
+                Here you can choose how to apply batch normalization to the architecture.       
+            
             decay_units : boolean, default: False
                 If False then keep the number of units constant at the value given by 'input_units'.
                 If True then decay the number of units by a factor of 2 from layer to layer.
@@ -47,7 +56,6 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
                 
         """
         # We need to know the shape of the data, and the number of classes
-        # We need to set these before constructing the network
         self.input_shape, self.output_shape = (None, None)        
         self.name = 'neuralnet'
         
@@ -59,16 +67,28 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
         
         # Specify architecture
         self.network['n_hidden'] = n_hidden
-        self.network['activation'] = ['relu'] * (n_hidden+1)
-        self.network['batchnorm'] = [False] * (n_hidden+1)
-        self.network['dropout'] = [True] * (n_hidden+1)
         self.network['p'] = p
+        self.network['activation'] = ['relu'] * (n_hidden+1)
+        
+        # Check how to implement batchnorm and dropout
+        for key, var in zip(('batchnorm', 'dropout'), (batch_norm, dropout)):
+            if isinstance(var, bool):
+                self.network[key] = [var] * (n_hidden+1)
+            elif isinstance(var, list):
+                assert len(var)==(n_hidden+1)
+                self.network[key] = var
+            else:
+                raise ValueError("Incorrect '%s' type." % key)
+        
+        # Handle neuron distribution per layer
         if self.decay_units:
-            self.network['units'] = [int(input_units//2**i) 
-                                     for i in range(n_hidden+1)]
+            self.network['units'] = [max(1, int(input_units//2**i)) for i in range(n_hidden+1)]
         else:
             self.network['units'] = [input_units] * (n_hidden+1)
             
+        # Callbacks placeholder
+        self.network['callbacks'] = []
+        
         # Estimator is yet to be defined at this stage
         self.estimator = None
         self.ready = False
@@ -115,20 +135,15 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
         
         model = Sequential()
         for i in range(self.network['n_hidden']+1):
-            # Fully connected layers
             if i==0:
                 model.add(Dense(units=units[i], input_shape=self.input_shape))
             else:
-                model.add(Dense(units=units[i]))
-                
-            # Add activation before batchnorm (if BN is added)
-            model.add(Activation(activations[i]))
-            
-            # Adding batchnorm, if desired
-            if add_batchnorm[i]: model.add(BatchNormalization())    
-            
-            # Finally, add dropout, if desired
-            if add_dropout[i]: model.add(Dropout(p))
+                model.add(Dense(units=units[i]))                
+            model.add(Activation(activations[i]))            
+            if add_batchnorm[i]: 
+                model.add(BatchNormalization())                
+            if add_dropout[i]: 
+                model.add(Dropout(p))
             
         model.add(Dense(units=self.output_shape, activation='softmax'))                
         model.compile(loss='categorical_crossentropy',
@@ -157,6 +172,19 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
                                     % (100*train_size, total_time/60.))
         
         
+    def callbacks(self):
+        
+        # learning rate schedule
+        def step_decay(epoch):
+            initial_lrate = 0.1
+            drop = 0.5
+            epochs_drop = 10.0
+            lrate = initial_lrate * math.pow(drop, math.floor((1+epoch)/epochs_drop))
+            return lrate
+        
+        lrate = LearningRateScheduler(step_decay)
+        
+    
     def fit(self, X, y):
         
         # We keep a local copy of the labels 
@@ -178,7 +206,8 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
         # Fit estimator
         self.estimator.fit(X, y_, 
                            batch_size=self.network['batch_size'], 
-                           epochs=self.network['epochs'])     
+                           epochs=self.network['epochs'],
+                           callbacks=self.network['callbacks'])     
         
         
     def _set_cv_params(self):
