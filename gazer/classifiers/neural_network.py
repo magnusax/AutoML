@@ -1,111 +1,178 @@
 from ..base import BaseClassifier
 
+import warnings
+import numpy as np
+
 import keras
 from keras.models import Sequential
-from keras.layers import BatchNormalization, Dense, Dropout 
-from keras.activations import relu, softmax
-###from keras.optimizer import 
+from keras.layers import (Activation, 
+                          BatchNormalization, 
+                          Dense, Dropout)
 
 
 class MetaNeuralNetworkClassifier(BaseClassifier):
     
-    def __init__(self, random_state=None):
+    def __init__(self, epochs=10, batch_size=16, optimizer='adam', 
+                 learning_rate=1e-4, n_hidden=2, p=0.1):
     
-         # Meta data
-        self.name = 'kerasnn'
-        self.max_n_iter = 1
+        """
+        Parameters:
+        ------------
+        
+            epochs : integer, default: 10
+                The number of epochs to train for
                 
-        # Init params
-        self.init_params = {}
-        self.init_params['random_state'] = random_state
+            batch_size : integer, default: 16
+                Batch size 
+                
+            optimizer : string or keras callable. Default: 'adam'
+                The optimizer to use when compiling
+                
+            learning_rate : float, default: 1e-4
+                Specify learning rate if applicable. 
+                
+            n_hidden : integer, default: 2
+                Specify the number of hidden dense layers
+                
+            p : float, default: 0.1
+                Specify dropout rate if applicable. 
+                Only takes effect when 'dropout' is set to True in network dict.
+                
+        """
+        # We need to know the shape of the data, and the number of classes
+        # We need to set these before constructing the network
+        self.input_shape, self.output_shape = (None, None)        
+        self.name = 'neuralnet'
         
-        self.epochs = epochs
-        self.batches = batches
-        self.optimizer = optimizer
+        self.network = {}
+        self.network['epochs'] = epochs
+        self.network['batch_size'] = batch_size
+        self.network['optimizer'] = optimizer
+        self.network['lr'] = learning_rate
         
-        self.estimator = self._get_clf()    # Define estimator        
+        # Specify architecture
+        self.network['n_hidden'] = n_hidden       
+        self.network['units'] = [100] * (n_hidden+1)
+        self.network['activation'] = ['relu'] * (n_hidden+1)
+        self.network['batchnorm'] = [False] * (n_hidden+1)
+        self.network['dropout'] = [0.1] * (n_hidden+1)
+        self.network['p'] = p
         
-    def _get_clf(self):
-        return flexible_model(**self.network_params)
+        self.ready = False
+        self.estimator = None
     
+    
+    def get_info(self):
+        return {'does_classification': True,
+                'does_multiclass': True,
+                'does_regression': False, 
+                'predict_probas': True}
+    
+    
+    def set_architecture(self, input_shape, output_shape):
+        """
+        Called prior to building and compiling the keras model.
+        """
+        # Handle different representations
+        if hasattr(input_shape, len):
+            self.input_shape = (*input_shape,)
+        else:
+            self.input_shape = (input_shape,)
+            
+        # The `output_shape` is simply the number of class labels    
+        self.output_shape = output_shape
+        self.ready = True
+        return
         
-    def flexible_model(network):
+    
+    def _get_clf(self):
+
         """ 
         We use the sequential model API and introduce some flexibility
         in the number of hidden layers, hidden units, regularization, activation, 
         and learning rates.
         
-        """
+        """ 
+        assert self.ready==True
         
-        layers_minus_final = num_hidden_layers+1
+        units = self.network['units']
+        activations = self.network['activation']
+        add_batchnorm = self.network['batchnorm']
+        add_dropout = self.network['dropout']        
+        p = self.network['p']
         
-        input_shape = (X.shape[1],)
-        
-        units = network['units']
-        activation = network['activation']
-        add_batchnorm = network['bnorm']
-        add_dropout = network['dropout']
-        
-        # Define model
         model = Sequential()
-        
-        for i in range(layers_minus_final):
-            
-            # Fully connected layer
+        for i in range(self.network['n_hidden']+1):
+            # Fully connected layers
             if i==0:
-                model.add( Dense(units=units[i], input_shape=input_shape) )
+                model.add(Dense(units=units[i], input_shape=self.input_shape))
             else:
-                model.add( Dense(units=units[i]) )
+                model.add(Dense(units=units[i]))
                 
             # Add activation before batchnorm (if BN is added)
-            model.add( Activation(activation[i]) )
+            model.add(Activation(activations[i]))
             
             # Adding batchnorm, if desired
-            if add_batchnorm[i]:
-                model.add( BatchNormalization() )    
+            if add_batchnorm[i]: model.add(BatchNormalization())    
             
             # Finally, add dropout, if desired
-            if add_dropout[i]:
-                model.add( Dropout(prob[i]) )
+            if add_dropout[i]: model.add(Dropout(p))
             
-        model.add( Dense(units=num_classes, activation=activation[-1]) )
-                
-        # Compile
-        model.compile(
-            loss='categorical_crossentropy',
-            optimizer=self.optimizer,
-            metrics=['accuracy'])
-        
+        model.add(Dense(units=self.output_shape, activation='softmax'))                
+        model.compile(loss='categorical_crossentropy',
+                      optimizer=self.network['optimizer'],
+                      metrics=['accuracy'])
         return model
-    
-        
-    def get_info(self):
-        return {'does_classification': True,
-                'does_multiclass': True,
-                'does_regression': False, 
-                'predict_probas': hasattr(self.estimator, 'predict_proba')}
-    
-    
-    def adjust_params(self, par):
-        return super().adjust_params(par)    
     
     
     def check_training(X, y, train_size=0.1):
         """ 
-        Perform training on x% (x<<100) of the training data to check that 
-        we can include the network without having to wait for a very long 
+        Perform training on X% (X<<100) of the training data to check that 
+        we can include the algorithm without having to wait for a very long 
         time to finish tranining on the full dataset.
-        
         """
-        X_sample, _, y_sample, _ = train_test_split(X, y, train_size=train_size, 
-                                                    random_state=self.random_state)
+        
+        # We cap the size of the training fraction
+        train_size = 0.5 if train_size > 0.5 else train_size
+        X_sample, _, y_sample, _ = train_test_split(X, y, train_size=train_size)
 
         start_time = time.time()
         self.estimator.fit(X_sample, y_sample)
         total_time = time.time()-start_time
-        warnings.warn("Keras trained on %s%% of data. Time: %.2f (min)" 
-                      % (100*train_size, total_time/60.))
         
+        # Output a warning 
+        warnings.warn("Time spent training on %s%% of data: %.2f (min)" 
+                                    % (100*train_size, total_time/60.))
+        
+        
+    def fit(self, X, y, **kwargs):
+        
+        # We keep a local copy of the labels 
+        # to avoid modifying the original input data
+        y_ = y.copy()
+        
+        if len(y_.shape)==1: y_ = y_.reshape(-1, 1)
+        
+        if y_.shape[1]==1:
+            warnings.warn(
+                """Keras expects one-hot encoded label data: your data does not seem to fit this requirement.
+                   \nWill attempt to apply one-hot encoding before sending to `fit` method.""")
+            y_ = keras.utils.to_categorical(y_)
+        
+        # Freeze architecture
+        self.set_architecture(X.shape[1], y_.shape[1])
+        # Define estimator
+        self.estimator = self._get_clf()
+        # Fit estimator
+        self.estimator.fit(X, y_, batch_size=self.network['batch_size'], 
+                           epochs=self.network['epochs'], **kwargs)     
+        
+        
+    def _set_cv_params(self):
+        """
+        Define trainable parameters. In this case we specify different
+        architectures.
+        """
         
         
         
