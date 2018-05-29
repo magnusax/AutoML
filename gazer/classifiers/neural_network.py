@@ -1,32 +1,38 @@
 from ..base import BaseClassifier
 
+import os
 import warnings
 import numpy as np
+import pandas as pd
 
 import keras
-from keras.callbacks import LearningRateScheduler
 from keras.models import Sequential
+from keras.callbacks import (LearningRateScheduler, 
+                             ReduceLROnPlateau, 
+                             ModelCheckpoint)
 from keras.layers import (Activation, 
                           BatchNormalization, 
                           Dense, Dropout)
 
+from ..externals.clr_callback import CyclicLR
+
 
 class MetaNeuralNetworkClassifier(BaseClassifier):
     
-    def __init__(self, epochs=10, batch_size=16, optimizer='adam', learning_rate=1e-4, 
+    def __init__(self, epochs=50, batch_size=16, optimizer='adam', learning_rate=1e-4, 
                  n_hidden=2, p=0.1, dropout=True, batch_norm=False, decay_units=False, input_units=250):
-    
+        
         """
         Parameters:
         ------------
         
-            epochs : integer, default: 10
+            epochs : integer, default: 50
                 The number of epochs to train for.
                 
             batch_size : integer, default: 16
                 Batch size used in the fit method.
                 
-            optimizer : string or keras callable. Default: 'adam'
+            optimizer : string or keras callable. Default: str, 'adam'
                 The optimizer to use when compiling.
                 
             learning_rate : float, default: 1e-4
@@ -37,7 +43,8 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
                 
             p : float, default: 0.1
                 Specify dropout rate if applicable. 
-                Only takes effect when 'dropout' is set to True.
+                Only takes effect when 'dropout' is set to True or the dropout list contains
+                at least one item which is set to True (see below).
             
             dropout : Boolean or list of booleans. Default: True.
                 If providing a list: it must be of length n_hidden+1
@@ -55,9 +62,11 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
                 The number of units (neurons) to use in the input layer.
                 
         """
-        # We need to know the shape of the data, and the number of classes
-        self.input_shape, self.output_shape = (None, None)        
         self.name = 'neuralnet'
+        
+        # We need to know the shape of the data, and the number of classes
+        # They are set prior to calling `fit` through a call to `set_architecture`
+        self.input_shape, self.output_shape = (None, None)        
         
         self.network = {}
         self.network['epochs'] = epochs
@@ -70,7 +79,7 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
         self.network['p'] = p
         self.network['activation'] = ['relu'] * (n_hidden+1)
         
-        # Check how to implement batchnorm and dropout
+        # Implement batchnorm and dropout per layer
         for key, var in zip(('batchnorm', 'dropout'), (batch_norm, dropout)):
             if isinstance(var, bool):
                 self.network[key] = [var] * (n_hidden+1)
@@ -80,14 +89,15 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
             else:
                 raise ValueError("Incorrect '%s' type." % key)
         
+        self.network['decay_units'] = decay_units
         # Handle neuron distribution per layer
-        if self.decay_units:
+        if self.network['decay_units']:
             self.network['units'] = [max(1, int(input_units//2**i)) for i in range(n_hidden+1)]
         else:
             self.network['units'] = [input_units] * (n_hidden+1)
             
         # Callbacks placeholder
-        self.network['callbacks'] = []
+        self.network['callbacks'] = self._callbacks()
         
         # Estimator is yet to be defined at this stage
         self.estimator = None
@@ -106,7 +116,7 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
         Called prior to building and compiling the keras model.
         """
         # Handle different representations
-        if hasattr(input_shape, len):
+        if isinstance(input_shape, collections.Iterable):
             self.input_shape = (*input_shape,)
         else:
             self.input_shape = (input_shape,)
@@ -154,7 +164,7 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
     
     def check_training(X, y, train_size=0.1):
         """ 
-        Perform training on X% (X<<100) of the training data to check that 
+        Perform training on p% (p<<100) of the training data to check that 
         we can include the algorithm without having to wait for a very long 
         time to finish training on the full dataset.
         """
@@ -172,20 +182,58 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
                                     % (100*train_size, total_time/60.))
         
         
-    def callbacks(self):
+    def _callbacks(self):
+        """
+        Implement callbacks.
+        """
+        # Reduce learning rate on plateau
+        reduce_lr = ReduceLROnPlateau(monitor='loss', factor=0.5, patience=5, min_lr=1e-6)
         
-        # learning rate schedule
-        def step_decay(epoch):
-            initial_lrate = 0.1
-            drop = 0.5
-            epochs_drop = 10.0
-            lrate = initial_lrate * math.pow(drop, math.floor((1+epoch)/epochs_drop))
-            return lrate
+        # Checkpointing
+        filepath = os.path.join(os.getcwd(), "tmp")
+        if not os.path.exists(filepath):
+            os.makedirs(filepath)
+        filepath = os.path.join(filepath, "weights.{epoch:02d}_{loss:.2f}.hdf5")       
         
-        lrate = LearningRateScheduler(step_decay)
-        
+        checkpointing = ModelCheckpoint(filepath, monitor='val_loss', save_best_only=False, 
+                                        save_weights_only=True, period=10)           
+        return[reduce_lr, checkpointing]
     
-    def fit(self, X, y):
+    
+    def lr_finder(self, X, y, monitor='acc', step_size=2000):
+        """
+        Find optimal learning rate
+        
+        """
+        if not monitor in ('acc', 'loss'):
+            raise ValueError("monitor should be either 'acc' or 'loss'.")
+            
+        if step_size is None:
+            step_size = int(np.ceil(X.shape[0]/self.network['batch_size']))
+        clr = CyclicLR(base_lr=1e-6, max_lr=10.0, 
+                       step_size=step_size, mode='triangular', lr_find=True)
+        
+        # Save previous values in in order to be 
+        # able to restore when finished
+        callbacks_old, epoch_old = \
+            (self.network['callbacks'], self.network['epochs'])
+        
+        self.network['callbacks'], self.network['epochs'] = [clr], 5
+        self.fit(X, y)
+        
+        clr = self.network['callbacks'][0]        
+        ylr = pd.Series(clr.history[monitor]).rolling(window=3).mean()
+        xlr = np.array(clr.history['lr'])
+        
+        # Restore
+        self.network['callbacks'], self.network['epochs'] = \
+            (callbacks_old, epoch_old)
+        self.estimator = None
+        
+        return (xlr, ylr)
+    
+    
+    def fit(self, X, y, ):
         
         # We keep a local copy of the labels 
         # to avoid modifying the original input data
@@ -209,14 +257,3 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
                            epochs=self.network['epochs'],
                            callbacks=self.network['callbacks'])     
         
-        
-    def _set_cv_params(self):
-        """
-        Define trainable parameters. In this case we specify different
-        architectures.
-        """
-        
-        
-        
-        
-   
