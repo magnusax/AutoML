@@ -41,6 +41,7 @@ This method trains all initialized algorithms. Moreover, Random, Grid search, an
 are implemented and may be directly called from the GazerMetaLearner object.
 
 
+### Roadmap
 Some ideas are currently being implemented, e.g.
 * Markov Chain Monte Carlo scheme for optimization of (very-) large ensemble models 
 for large data sets where training times are relatively long.
