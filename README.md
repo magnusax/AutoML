@@ -42,7 +42,7 @@ learner.fit(X, y)
 This method trains all initialized algorithms. Moreover, Random, Grid search, and Bayesian optimization methods
 are implemented and may be directly called from the `learner` instance. To see parameters, simply call:
 ```python
-learner.clf['name'].cv_params.
+learner.clf['name'].cv_params
 
 ```
 This returns a list containing one or more parameter dictionaries that may be edited in place.
@@ -61,7 +61,7 @@ ML libraries which will be heavily relied upon are first and foremost:
 * (Done) Scikit-learn
 * (Done) Xgboost
 * (Done) Keras 
-* (Coming) Pytorch (>= 0.4)
+* (Coming) Pytorch ($\ge$ 0.4)
 
 
 TODO: add direct links to each github project mentioned on this page, 
