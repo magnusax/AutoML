@@ -27,9 +27,11 @@ returns a dictionary of (name, MetaClassifier) tuples, where the **MetaClassifie
 classifier. The current version of the library also implements *xgboost* and *keras* classifiers.
 
 ```python    	
-learner.clf = {name1: MetaClassifier1, name2: MetaClassifier2, ... , nameN: MetaClassifierN)}
+learner.clf = {name1: MetaClassifier1, name2: MetaClassifier2, ... , nameN: MetaClassifierN}
 ```
    	
+To inspect loaded algorithms, simply call `learner.names`.
+
 Assuming a standard supervised learning scenario with data available in the form of `X, y`, you can easily fit 
 available algorithms using default (i.e. reasonble) hyperparameter settings:
 
@@ -38,7 +40,12 @@ learner.fit(X, y)
 ```
 
 This method trains all initialized algorithms. Moreover, Random, Grid search, and Bayesian optimization methods
-are implemented and may be directly called from the GazerMetaLearner object.
+are implemented and may be directly called from the `learner` instance. To see parameters, simply call:
+```python
+learner.clf['name'].cv_params.
+
+```
+This returns a list containing one or more parameter dictionaries that may be edited in place.
 
 
 ### Roadmap
