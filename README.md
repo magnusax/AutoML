@@ -61,7 +61,7 @@ ML libraries which will be heavily relied upon are first and foremost:
 * (Done) Scikit-learn
 * (Done) Xgboost
 * (Done) Keras 
-* (Coming) Pytorch ($\ge$ 0.4)
+* (Coming) Pytorch (`\ge 0.4`)
 
 
 TODO: add direct links to each github project mentioned on this page, 
