@@ -268,7 +268,15 @@ class GazerMetaLearner():
         # Keep track of score for every algorithm
         scores = {}
         for name, y_pred in preds:
-            score_ = scorer(y_true, y_pred)            
+            
+            # Handle keras model output
+            if name == 'neuralnet':
+                y_pred = np.array(
+                    [max(enumerate(probs), key=itemgetter(1))[0] 
+                     for probs in y_pred])
+                
+            score_ = scorer(y_true, y_pred)
+            
             if multiclass and len(np.array(y_pred).shape) == 1:
                 lb = LabelBinarizer()
                 y_hat = lb.fit_transform(y_pred)
