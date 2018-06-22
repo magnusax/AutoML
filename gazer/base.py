@@ -34,46 +34,56 @@ class BaseClassifier():
             if k in self.estimator.cv_params.keys():
                 self.estimator.cv_params[k] = v
         return self
-    
+
+
     def set_tune_params(self, params, num_params=1, mode='random', keys=list()):
         """
-        Docstring:
-        
-        Input args:
-        ---------------
-                params: dictionary contaning all hyperparameters belonging to classifier
-            num_params: integer specifying number of parameters to sample if mode=='random'
-                  mode: string, 'random' (sample) or 'select' (choose)
-                  keys: list of keys (subsample of keys contained in 'params'
-                  
-        Output:
-        ---------------
-        dictionary containing parameters to train            
-        """        
+
+        Parameters:
+        ------------
+
+	params :
+	    dictionary containing all hyperparameters belonging to classifier
+
+	num_params :
+	    integer specifying number of parameters to sample if mode=='random'
+
+	mode :
+	    str, values: 'random' (sample) or 'select' (choose)
+
+	keys :
+	    list of keys (subsample of keys contained in 'params'
+
+
+        Returns:
+        --------
+     	Dictionary containing parameters to train
+
+
+	"""
         if not isinstance(params, dict):
             raise TypeError("Expected 'dict' type. Got '%s'" % type(params))
         if not mode in ('random', 'select'):
             raise ValueError("mode should be 'random' or 'select'")
-        items = params.items()        
-        
-        if mode == 'random':                           
+        items = params.items()
+
+        if mode == 'random':
             if not 0<num_params<=len(items):
-                raise ValueError("Expect 0 < num_params <= items in dict.")
+                raise ValueError("Expected 0<num_params<=items.")
             return dict(random.sample(items, num_params))
-        
+
         elif mode == 'select':
-            if not 0<len(keys)<=len(items): 
-                raise ValueError("Expect 0 < len(keys) <= items in dict.")
+            if not 0<len(keys)<=len(items):
+                raise ValueError("Expected 0<len(keys)<=items.")
             par = {}
             for key, v in items:
-                if key in keys: 
+                if key in keys:
                     par[key] = v
-            if not len(par)>0: 
-                raise Exception("No trainable parameters found: check 'keys' input.")
+            if not len(par)>0:
+                raise Exception("No trainable parameters: check 'keys'.")
             return par
-            
-            
-            
+
+
 class EnsembleBaseClassifier():    
     def __init__(self):
         self.__classname__ = 'EnsembleBaseClassifier'

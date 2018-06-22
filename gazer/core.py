@@ -9,12 +9,11 @@ from operator import itemgetter
 from skopt import gp_minimize
 from sklearn.preprocessing import LabelBinarizer
 from sklearn.model_selection import cross_val_score, RandomizedSearchCV
-from sklearn.metrics import get_scorer
 
 from .base import EnsembleBaseClassifier, BaseClassifier
 from .algorithms import implemented        
 from .utils import skopt_space_mapping
-
+from .metrics import get_scorer
 
 
 class GazerMetaLearner():
@@ -101,11 +100,13 @@ class GazerMetaLearner():
         
         if self.verbose>0: print("Initialized: %s" % ", ".join(self.names))         
     
-
     @property
     def names(self):
         return list(self.clf.keys())
     
+    @property
+    def num_estimators(self):
+        return len(self.names)
 
     def _build_classifier_dict(self):
         # Build repo
@@ -116,7 +117,6 @@ class GazerMetaLearner():
             if self.verbose>0: print("Sampling %i algorithms" % self.num_sample)
             clfs = [clfs[i] for i in np.random.choice(len(clfs), self.num_sample, replace=False)]        
         return {n:c for n,c in clfs}
-        
     
     def _build_classifier_repository(self):
         # Read implemented algorithms (algorithms.py)
@@ -129,7 +129,6 @@ class GazerMetaLearner():
             if name is not None and algo is not None:
                 algorithms.append((name, algo))  
         return algorithms
-
 
     def _add_algorithm(self, module_name, algorithm_name):                     
         """ Import classifier algorithms 
@@ -152,10 +151,15 @@ class GazerMetaLearner():
             else:
                 instance = algorithm()                
         return instance.name, instance
-
+    
     
     def fit(self, X, y, n_jobs=1):
         """ 
+        Fit available algorithms.
+        
+        Note: the neural network module needs to be treated separately
+        and so has its own `fit` method implemented.
+        
         Parameters:
         ------------
         
@@ -167,26 +171,26 @@ class GazerMetaLearner():
                 
             n_jobs : integer, optional, default: 1
                 Perform parallel computation if implemented in algorithm.
-                            
-        Fit initialized algorithms.
         
         """
+        return self._fit(X=X, y=y, n_jobs=n_jobs)
+    
+    
+    def _fit(self, X, y, n_jobs=1):        
+        
         for name, clf in self.clf.items():
-            st = time.time()
-            
-            # The neural network module needs to be treated separately
-            # and so has its own `fit` method implemented
+            st = time.time()            
             if hasattr(clf, 'fit'):
                 clf.fit(X, y)
             else:
                 if n_jobs>1 and hasattr(clf.estimator, 'n_jobs'):
                     clf.estimator.set_params(**{'n_jobs': n_jobs})
                 clf.estimator.fit(X, y)
-            
             if self.verbose > 0:
-                print("%s: training time=%.2f (min)" % (name, (time.time()-st)/60.))
+                print("%s: training time=%.2f (min)" 
+                      % (name, (time.time()-st)/60.))
         return self
-
+    
     
     def set_params(self, name, params):
         clf = self._get_algorithm(name)
@@ -218,7 +222,7 @@ class GazerMetaLearner():
         return probas
     
 
-    def meta_evaluate(self, preds, y_true, metric=None, multiclass=None, **kwargs):
+    def evaluate(self, preds, y_true, metric=None, multiclass=None, **kwargs):
         """
         Evalute predictions (preds) against ground truth (y_true) using scikit-learn metrics
  

@@ -18,37 +18,36 @@ from .gazer import GazerMetaLearner
 
 
 
-def build(X, names=None):
-    """ 
-    Build ensemble from base learners. 
-    If 'names' is not set then method returns an empty dictionary.
-    
+def build(learner, X):
+    """
+    Build ensemble from base learners.
+
+
     Parameters:
     -----------
 
+
+	learner : class object
+	    instance of GazerMetaLearner
+
         X : matrix-like
-            input 2D matrix of shape (n_samples, n_columns)
-            
-        names : array-like
-            iterable of names of algorithms to fetch from repository.
-            If not set then names are read from a GazerMetaLearner object.
-    
+            input 2D matrix of shape (n_samples, n_features)
+		We need some meta data to be able to make sensible choices
+		on parameters
+
+
     Returns:
     ---------
 
         dict : (name_of_algorithm[str]: list(sklearn classifiers))
-            Dictionary containing name keys with corresponding values being 
+            Dictionary containing name keys with corresponding values being
             a list of possible learners with varying settings of hyperparameters.
-    """    
-    
-    if names is None:
-        names = GazerMetaLearner(method='complete').get_names()
-        print("Possible names: %s" % ",".join(names))
-        return
-    
-    lib = library_config(names, *X.shape)
 
-    return { name: _generate(name, grid) for name, grid in lib }
+
+    """
+    lib = library_config(learner.names, *X.shape)
+    return {name:_generate(name, grid) for name, grid in lib}
+
 
 
 def fit(ensemble, X, y, save_dir, scoring='accuracy', **kwargs):
