@@ -266,24 +266,22 @@ class GazerMetaLearner():
         log_loss = get_scorer('log_loss')
         
         # Keep track of score for every algorithm
-        scores = []
+        scores = {}
         for name, y_pred in preds:
-            score_ = scorer(y_true, y_pred)
-            
+            score_ = scorer(y_true, y_pred)            
             if multiclass and len(np.array(y_pred).shape) == 1:
                 lb = LabelBinarizer()
                 y_hat = lb.fit_transform(y_pred)
             else:
                 y_hat = np.array(y_pred)
-            lg_loss_ = log_loss(y_true, y_hat)
-            
-            scores.append((name, score_, lg_loss_))                        
-        
-        scores.sort(key=itemgetter(1), reverse=True)
+            lg_loss_ = log_loss(y_true, y_hat)            
+            scores[name] = {metric+" score": score_, 'log loss score': lg_loss_}                        
         
         if self.verbose>0:
-            for name, score, lg_loss in scores: 
-                print("---- %s ---- \n\tLog-loss: %.4f \n\tScore: %.4f" 
+            for name, dscore in scores.items():
+                lg_loss = dscore['log loss score']
+                score = dscore[metric+" score"]
+                print("%s performance:\n\t Log-loss: %.4f \n\t Score: %.4f" 
                       % (name, lg_loss, score))
         return scores
     
