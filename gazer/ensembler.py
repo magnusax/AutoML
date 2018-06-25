@@ -2,54 +2,97 @@ from __future__ import print_function
 
 import os
 import sys
+import copy
 import warnings
-from copy import deepcopy
-
 import numpy as np
+
+from tqdm import trange
 from scipy.stats import uniform
 from sklearn.externals import joblib
 from sklearn.exceptions import NotFittedError
-from sklearn.metrics import get_scorer
 
+from .metrics import get_scorer
 from .sampling import Loguniform
-from .progress import show_progress
 from .library import library_config
-from .gazer import GazerMetaLearner
-
+from .core import GazerMetaLearner
 
 
 def build(learner, X):
-    """
-    Build ensemble from base learners.
-
+    """Build ensemble from base learners contained
+    in the `learner` object.
 
     Parameters:
     -----------
-
-
-	learner : class object
-	    instance of GazerMetaLearner
+        learner : object
+            instance of GazerMetaLearner class
 
         X : matrix-like
             input 2D matrix of shape (n_samples, n_features)
-		We need some meta data to be able to make sensible choices
-		on parameters
-
+            We need some meta data to be able to make sensible choices
+            on parameters.
 
     Returns:
     ---------
-
-        dict : (name_of_algorithm[str]: list(sklearn classifiers))
+        dictionary : (algorithm[str]: classifiers[list])
             Dictionary containing name keys with corresponding values being
             a list of possible learners with varying settings of hyperparameters.
-
-
     """
     lib = library_config(learner.names, *X.shape)
-    return {name:_generate(name, grid) for name, grid in lib}
+    return {name: _generate(name, grid) for name, grid in lib}
 
 
+def _generate(name, params):    
+    """Here we generate estimators to later fit."""
+    learner = GazerMetaLearner(
+        method='selected', 
+        estimators=[name])
+    clf = learner._get_algorithm(name)
+    del learner
+            
+    estimators = []
+    for param in params:
+        par = param['param']
+        premise = param['config']
+        values = _generate_grid(param['grid'])        
+        for value in values:
+            estimator = copy.deepcopy(clf.estimator)
+            pars = {par:value}
+            pars.update(premise)
+            try:
+                estimator.set_params(**pars)
+            except:
+                warnings.warn("Failed to set: %s" % par)
+                continue
+            estimators.append(estimator)
+            del estimator                    
+    return estimators
 
+
+def _generate_grid(grid):
+    """ Generate a config grid. """
+  
+    method = grid.get('method', None)
+    assert method in ('take', 'sample')  
+    category = grid.get('category', None)        
+    assert category is not None
+        
+    if method=='take':
+        return grid['values']
+    
+    elif method=='sample':                
+        low, high, points, prior = (
+            grid['low'], grid['high'], grid['numval'], grid['prior'])
+        
+        if category=='discrete':
+            raise ValueError('Discrete sampling not implemented.')                   
+        
+        elif category=='continuous':                                  
+            if prior=='loguniform':
+                return Loguniform(low=low, high=high, size=points).range()
+            else:
+                return np.linspace(low, high, points, endpoint=True)
+
+            
 def fit(ensemble, X, y, save_dir, scoring='accuracy', **kwargs):
     """
     Fit an ensemble of algorithms. If `save_dir` is set then models
@@ -59,7 +102,6 @@ def fit(ensemble, X, y, save_dir, scoring='accuracy', **kwargs):
     
     Parameters:
     ------------
-        
         ensemble: dict(str:list)
             Dictionary of (name, estimator) tuples
                    
@@ -74,7 +116,7 @@ def fit(ensemble, X, y, save_dir, scoring='accuracy', **kwargs):
         
         scoring : str or callable
             Used when obtaining training data score
-            Fetches get_scorer() from sklearn.metrics
+            Fetches get_scorer() from local metrics.py module
             
         **kwargs: 
             Variables related to scikit-learn estimator's 
@@ -82,7 +124,6 @@ def fit(ensemble, X, y, save_dir, scoring='accuracy', **kwargs):
     
     Returns:
     ---------
-
         List of fitted learners. 
             If save_dir is a valid directory it will contain the 
             pickled versions of all fitted classifiers.
@@ -100,7 +141,7 @@ def fit(ensemble, X, y, save_dir, scoring='accuracy', **kwargs):
     for name, clfs in ensemble.items():
         total_fits = len(clfs)
         
-        for i, estimator in enumerate(clfs):
+        for i, estimator in trange(enumerate(clfs)):
             
             # Fit model
             if hasattr(estimator, 'fit'):
@@ -119,66 +160,7 @@ def fit(ensemble, X, y, save_dir, scoring='accuracy', **kwargs):
             
             # Save score
             model_scores.append(
-                (model_name, scorer(estimator.predict(X), y))
-            
-            # Show progress bar
-            show_progress(i, total_fits)
+                (model_name, scorer(estimator.predict(X), y)))
+
     
     return model_scores
-
-
-def _generate(estimator_name, estimator_params):    
-    """ Here we generate estimators to later fit. """
-    
-    learner = GazerMetaLearner(method='chosen', estimators=[estimator_name])
-    clfs = learner.clf
-    if len(clfs)==1:
-        clf = clfs[0][1]
-    else:
-        raise ValueError("Should find 1 algorithm only.")       
-    del learner
-    
-    estimators = []
-    for estimator_param in estimator_params:
-        param = estimator_param['param']
-        premise = estimator_param['premise']
-        values = _generate_grid(estimator_param['grid'])        
-        for value in values:
-            estimator = deepcopy(clf.estimator)
-            pars = { param:value }
-            pars.update(premise)
-            try:
-                estimator.set_params(**pars)
-            except:
-                warnings.warn("Failed to set param: %s" % param)
-                continue
-            estimators.append(estimator)
-            del estimator                    
-    return estimators
-
-
-def _generate_grid(grid):
-    """ Generate a config grid. """
-    
-    method = grid.get('method', None)
-    assert method in ('take', 'sample')
-    
-    category = grid.get('category', None)        
-    assert category is not None
-        
-    if method=='take':
-        return grid['values']
-    
-    elif method=='sample':                
-        low = grid['low']
-        high = grid['high']
-        grid_points = grid['numval']        
-        prior = grid['prior']
-        
-        if category=='discrete':
-            raise ValueError('Discrete sampling not implemented.')                   
-        elif category=='continuous':                                  
-            if prior=='loguniform':
-                return loguniform(low=low, high=high, size=grid_points).range()
-            else:
-                return np.linspace(low, high, grid_points, endpoint=True)

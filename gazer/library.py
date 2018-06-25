@@ -1,31 +1,28 @@
 def library_config(names, nrow, ncol):
-    """
-    Provide information on how to generate ensemble 
-    """
+    """Provide information on how to generate ensemble."""
     library = {
         'logreg': logreg_lib(nrow, ncol),
         'adaboost': adaboost_lib(nrow, ncol),
-        'nearestneigbors': nearest_neighbors_lib(nrow, ncol), 
-        'sgd_log_loss': None, 
+        'knn': nearest_neighbors_lib(nrow, ncol), 
+        'sgd_hinge': None, 
         'gaussian_nb': None, 
+        'svm': None,
         'multinomial_nb': naive_bayes_lib(nrow, ncol), 
         'bernoulli_nb': naive_bayes_lib(nrow, ncol),
         'random_forest': random_forest_lib(nrow, ncol),
-        'xgboost': xgboost_lib(nrow, ncol),}
-    
-    return list(
-        (name, grid) for name, grid in library.items() 
+        'xgboost': xgboost_lib(nrow, ncol),}    
+    return list((name, grid) for name, grid in library.items() 
         if (name in names) and (grid is not None))
 
-def get_config(hyper_param, fixed_params, grid):
-    return list(
-        {'param': hyper_param, 
-         'config': fixed_params, 
-         'grid': grid})
 
-def get_grid(category, method, values=None, prior=None, low=None, high=None, numval=None):
-    """
-    Generate a configuration grid used when building our ensembler.
+def get_config(hyper_param, fixed_params, grid):
+    return [{'param': hyper_param, 
+             'config': fixed_params, 'grid': grid}]
+
+
+def get_grid(category, method, 
+             values=None, prior=None, low=None, high=None, numval=None):
+    """Generate a configuration grid used when building our ensembler.
     
     Input:
     ---------
@@ -36,10 +33,12 @@ def get_grid(category, method, values=None, prior=None, low=None, high=None, num
             'sample' or 'take'
             
         values : iterable, array-like
-            Used only when method=='take'. Specifies values of hyperparameter.
+            Used only when method=='take'. 
+            Specifies values of hyperparameter.
             
         prior : str
-            Specifies how to sample hyperparameter ('uniform' or 'loguniform'). 
+            Specifies how to sample hyperparameter 
+            ('uniform' or 'loguniform'). 
             Used when method=='sample'.
             
         low : integer or float:
@@ -53,7 +52,7 @@ def get_grid(category, method, values=None, prior=None, low=None, high=None, num
             
     Returns:
     ---------    
-        Dictionary with conditional keys
+    Dictionary with conditional keys.
     """
     if not category in ('discrete', 'continuous'):
         raise Exception("Invalid 'category' argument.")
@@ -79,15 +78,16 @@ def get_grid(category, method, values=None, prior=None, low=None, high=None, num
         if not isinstance(values, list):
             values = list(values)
         config['values']=values
-    
     return config
+    
     
 def xgboost_lib(nrow, ncol):
     depth_grid=get_grid(
         'discrete', 
         'take', 
-        values=[1,2,3,4,5,6,7,8,9,10])    
+        values=list(range(1,11)))    
     return get_config('max_depth', {'n_estimators':100}, depth_grid)
+
 
 def logreg_lib(nrow, ncol):
     C_grid = get_grid(
@@ -97,6 +97,7 @@ def logreg_lib(nrow, ncol):
     return get_config('C', {'penalty': 'l1'}, C_grid)+\
            get_config('C', {'penalty': 'l2'}, C_grid)
 
+    
 def adaboost_lib(nrow, ncol):
     max_feats = [
         f for f in (1, 2, 4, 6, 8, 12, 16, 20) if f<=ncol]
@@ -105,6 +106,7 @@ def adaboost_lib(nrow, ncol):
                       {'n_estimators': 512, 
                        'base_estimator__criterion': 'gini'},
                       grid)
+
 
 def nearest_neighbors_lib(nrow, ncol):
     num_neighbors = [
@@ -115,12 +117,14 @@ def nearest_neighbors_lib(nrow, ncol):
     return get_config('n_neighbors', {'weights': 'distance'}, grid)+\
            get_config('n_neighbors', {'weights': 'uniform'}, grid) 
 
+    
 def naive_bayes_lib(nrow, ncol):
     grid = get_grid(
         'continuous', 
         'sample', 
         prior='uniform', low=0., high=1., numval=20)
     return get_config('alpha', {'fit_prior':True}, grid)
+
 
 def random_forest_lib(nrow, ncol):
     max_feats = [
@@ -129,11 +133,14 @@ def random_forest_lib(nrow, ncol):
     grid = get_grid('discrete', 'take', values=max_feats)
     return get_config('max_features', {'n_estimators':1024}, grid)
 
+
 def svm_lib():
     pass
 
+
 def decision_tree_lib():
     pass
+
 
 def neuralnet_lib():
     pass
