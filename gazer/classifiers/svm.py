@@ -8,7 +8,7 @@ from sklearn.kernel_approximation import Nystroem
 
 class MetaSVMClassifier(BaseClassifier):
 
-    def __init__(self, alpha=0.0001, fit_intercept=True, penalty='l2', n_iter=5, 
+    def __init__(self, alpha=0.0001, fit_intercept=True, penalty='l2', max_iter=5, 
                  learning_rate='optimal', kernel='rbf', gamma=None, coef0=1, degree=3, 
                  kernel_params=None, n_components=100, random_state=None):
         """
@@ -19,7 +19,7 @@ class MetaSVMClassifier(BaseClassifier):
         """
         
         # Meta data
-        self.name = 'svm-SVC'
+        self.name = 'svm'
         self.max_n_iter = 1000
                 
         # Init params
@@ -37,7 +37,7 @@ class MetaSVMClassifier(BaseClassifier):
         self.init_params['penalty'] = penalty
         self.init_params['alpha'] = alpha
         self.init_params['fit_intercept'] = fit_intercept
-        self.init_params['n_iter'] = n_iter
+        self.init_params['max_iter'] = max_iter
         self.init_params['learning_rate'] = learning_rate
         self.init_params['random_state'] = random_state
 
@@ -73,8 +73,8 @@ class MetaSVMClassifier(BaseClassifier):
             'kernel__coef0': uniform(0., 1.0),
             'kernel__n_components': [100, 250, 500, 1000, 1200]}               
         model = {
-            'model__alpha': Loguniform(low=1e-7, high=1e+7), 
-            'model__n_iter': [6, 8, 12, 24, 48, 96],
+            'model__alpha': Loguniform(low=1e-8, high=1e+8), 
+            'model__max_iter': [6, 8, 12, 24, 48, 96],
             'model__fit_intercept': [True, False],
             'model__penalty': ['l1', 'l2']}
         

@@ -5,16 +5,17 @@ import sys
 import copy
 import warnings
 import numpy as np
+from operator import itemgetter
 
-from tqdm import trange
+from tqdm import tqdm
 from scipy.stats import uniform
 from sklearn.externals import joblib
 from sklearn.exceptions import NotFittedError
 
 from .metrics import get_scorer
 from .sampling import Loguniform
-from .library import library_config
 from .core import GazerMetaLearner
+from .library import library_config
 
 
 def build(learner, X):
@@ -103,7 +104,7 @@ def fit(ensemble, X, y, save_dir, scoring='accuracy', **kwargs):
     Parameters:
     ------------
         ensemble: dict(str:list)
-            Dictionary of (name, estimator) tuples
+            Dictionary of name, list-of-estimators key-value pairs
                    
         X : matrix-like
             2D matrix of shape (n_samples, n_columns)
@@ -119,48 +120,64 @@ def fit(ensemble, X, y, save_dir, scoring='accuracy', **kwargs):
             Fetches get_scorer() from local metrics.py module
             
         **kwargs: 
-            Variables related to scikit-learn estimator's 
-            `fit` method (such as e.g. n_jobs)
+            Variables related to scikit-learn estimator.
+            Used to alter estimator parameters if needed (such as e.g. n_jobs)
+            
+            Example: 
+                - Use {'random_forest': {'n_jobs': 4}} to use parallel
+                  processing when fitting the random forest algorithm. 
+                - Note that the key needs to match the a key in the `ensemble` dict
+                  to take effect. 
+                - The change takes place through estimator.set_params()
     
     Returns:
     ---------
-        List of fitted learners. 
-            If save_dir is a valid directory it will contain the 
-            pickled versions of all fitted classifiers.
+    Dictionary with paths to fitted and pickled learners, as well as scores on 
+    training data. Note that joblib is used to pickle the data.
+    
     """ 
+    if (save_dir is None or len(save_dir)==0):
+        raise Exception(
+            "Please specify a valid directory.")
     
-    if not os.path.isdir(save_dir):
+    if os.path.exists(save_dir):
+        raise Exception(
+            "{} already exits. Please choose a different directory."
+            .format(save_dir))
+    try:
         os.makedirs(save_dir)
+    except:
+        raise Exception(
+            "Could not create folder {}.".format(save_dir))
     
-    # Get scorer from metrics
     scorer = get_scorer(scoring)
     
-    # Keep track of model score on train data
-    model_scores = []
+    # Keep track of model and scores in `models`
+    # All relevant data is available in `history`
+    history = {}
     
-    for name, clfs in ensemble.items():
-        total_fits = len(clfs)
-        
-        for i, estimator in trange(enumerate(clfs)):
+    for name, clfs in ensemble.items():        
+        os.makedirs(os.path.join(save_dir, name))        
+        fkwargs = kwargs.get(name, {})
+        print()   
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
             
-            # Fit model
-            if hasattr(estimator, 'fit'):
-                estimator.fit(X, y)
-            else:
-                warnings.warn("`fit` method required") 
-                break
-                
-            # Save model
-            if save_dir is not None:
-                model_name = 'model_%s%s.pkl' % (name, (i+1))
+            models = []
+            for idx, estimator in enumerate(tqdm(clfs, desc="{}".format(name), ncols=120)):
+                modelname = "{}_{:04d}train.pkl".format(name,(idx+1))
                 try:
-                    joblib.dump(estimator, os.path.join(save_dir, model_name))
+                    estimator.set_params(**fkwargs)
+                    estimator.fit(X, y)
                 except:
-                    raise Exception("Could not pickle %s" % model_name)
-            
-            # Save score
-            model_scores.append(
-                (model_name, scorer(estimator.predict(X), y)))
-
-    
-    return model_scores
+                    _, desc, _ = sys.exc_info()
+                    raise NotFittedError("Could not fit: {}".format(desc))
+                try:
+                    joblib.dump(estimator, os.path.join(save_dir, name, modelname))
+                except:
+                    raise Exception("Could not pickle: {}".format(modelname))
+                models.append(
+                    (modelname, scorer(estimator.predict(X), y)))
+        # Return sorted history dict  
+        history[name] = sorted(models, key=lambda x: -x[1])
+    return history

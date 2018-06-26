@@ -6,7 +6,7 @@ def library_config(names, nrow, ncol):
         'knn': nearest_neighbors_lib(nrow, ncol), 
         'sgd_hinge': None, 
         'gaussian_nb': None, 
-        'svm': None,
+        'svm': svm_lib(),
         'multinomial_nb': naive_bayes_lib(nrow, ncol), 
         'bernoulli_nb': naive_bayes_lib(nrow, ncol),
         'random_forest': random_forest_lib(nrow, ncol),
@@ -79,33 +79,45 @@ def get_grid(category, method,
             values = list(values)
         config['values']=values
     return config
-    
-    
+
+
+
+######################################
+#         MODEL LIBRARIES
+######################################
+
+
+
 def xgboost_lib(nrow, ncol):
-    depth_grid=get_grid(
+    depths = get_grid(
         'discrete', 
         'take', 
         values=list(range(1,11)))    
-    return get_config('max_depth', {'n_estimators':100}, depth_grid)
+    return get_config('max_depth', {'n_estimators':128}, depths)+\
+           get_config('max_depth', {'n_estimators':512}, depths)
 
 
 def logreg_lib(nrow, ncol):
-    C_grid = get_grid(
+    Cs = get_grid(
         'continuous', 
         'sample', 
-        prior='loguniform', low=1e-7, high=1e+4, numval=50)
-    return get_config('C', {'penalty': 'l1'}, C_grid)+\
-           get_config('C', {'penalty': 'l2'}, C_grid)
+        prior='loguniform', low=1e-8, high=1e+8, numval=100)
+    return get_config('C', {'penalty': 'l1'}, Cs)+\
+           get_config('C', {'penalty': 'l2'}, Cs)
 
     
 def adaboost_lib(nrow, ncol):
     max_feats = [
-        f for f in (1, 2, 4, 6, 8, 12, 16, 20) if f<=ncol]
-    grid = get_grid('discrete', 'take', values=max_feats)
-    return get_config('base_estimator__max_features', 
-                      {'n_estimators': 512, 
-                       'base_estimator__criterion': 'gini'},
-                      grid)
+        f for f in list(range(1,51)) if f<=ncol]
+    grid = get_grid('discrete', 
+                    'take', 
+                    values=max_feats)
+    return get_config(
+        'base_estimator__max_features', 
+        {'n_estimators': 128, 'base_estimator__criterion': 'gini'}, grid)+\
+           get_config(
+        'base_estimator__max_features', 
+        {'n_estimators': 256, 'base_estimator__criterion': 'entropy'}, grid)
 
 
 def nearest_neighbors_lib(nrow, ncol):
@@ -113,29 +125,37 @@ def nearest_neighbors_lib(nrow, ncol):
         v for v in (1, 3, 5, 7, 9, 11, 13, 
                     15, 17, 19, 21, 23, 25, 
                     27, 29, 31) if v<nrow]
-    grid = get_grid('discrete', 'take', values=num_neighbors)  
-    return get_config('n_neighbors', {'weights': 'distance'}, grid)+\
-           get_config('n_neighbors', {'weights': 'uniform'}, grid) 
+    neighbors = get_grid('discrete', 
+                         'take', 
+                         values=num_neighbors)  
+    return get_config('n_neighbors', {'weights': 'distance'}, neighbors)+\
+           get_config('n_neighbors', {'weights': 'uniform'}, neighbors) 
 
     
 def naive_bayes_lib(nrow, ncol):
-    grid = get_grid(
+    alphas = get_grid(
         'continuous', 
         'sample', 
         prior='uniform', low=0., high=1., numval=20)
-    return get_config('alpha', {'fit_prior':True}, grid)
+    return get_config('alpha', {'fit_prior':True}, alphas)
 
 
 def random_forest_lib(nrow, ncol):
     max_feats = [
-        f for f in (1, 2, 4, 6, 8, 12, 16, 20, 24) 
-        if f<=ncol]
-    grid = get_grid('discrete', 'take', values=max_feats)
-    return get_config('max_features', {'n_estimators':1024}, grid)
-
+        f for f in list(range(1, 51)) if f<=ncol]
+    maxfeats = get_grid('discrete', 
+                    'take', 
+                    values=max_feats)
+    return get_config('max_features', {'n_estimators': 1024, 'criterion':'gini'}, maxfeats)+\
+           get_config('max_features', {'n_estimators': 1024, 'criterion':'entropy'}, maxfeats)
 
 def svm_lib():
-    pass
+    alphas = get_grid(
+        'continuous', 
+        'sample', 
+        prior='loguniform', low=1e-8, high=1e+8, numval=100)
+    return get_config('model__alpha', {'model__penalty': 'l1'}, alphas)+\
+           get_config('model__alpha', {'model__penalty': 'l2'}, alphas)
 
 
 def decision_tree_lib():
