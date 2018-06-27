@@ -1,16 +1,21 @@
+import numpy as np
+
+
 def library_config(names, nrow, ncol):
     """Provide information on how to generate ensemble."""
     library = {
         'logreg': logreg_lib(nrow, ncol),
         'adaboost': adaboost_lib(nrow, ncol),
         'knn': nearest_neighbors_lib(nrow, ncol), 
-        'sgd_hinge': None, 
-        'gaussian_nb': None, 
+        'sgd_hinge': gradient_descent_lib(), 
+        'gaussian_nb': gaussian_naive_bayes(), 
         'svm': svm_lib(),
         'multinomial_nb': naive_bayes_lib(nrow, ncol), 
         'bernoulli_nb': naive_bayes_lib(nrow, ncol),
         'random_forest': random_forest_lib(nrow, ncol),
-        'xgboost': xgboost_lib(nrow, ncol),}    
+        'tree': decision_tree_lib(nrow, ncol),
+        'xgboost': xgboost_lib(nrow, ncol) }
+    
     return list((name, grid) for name, grid in library.items() 
         if (name in names) and (grid is not None))
 
@@ -81,86 +86,76 @@ def get_grid(category, method,
     return config
 
 
-
 ######################################
 #         MODEL LIBRARIES
 ######################################
 
 
-
 def xgboost_lib(nrow, ncol):
-    depths = get_grid(
-        'discrete', 
-        'take', 
-        values=list(range(1,11)))    
+    
+    depths = get_grid('discrete', 'take', values=list(range(1,21)))
+    estimators = get_grid('discrete','take', values=[int(n) for n in np.linspace(10, 1000, 31, endpoint=True)])
+    
     return get_config('max_depth', {'n_estimators':128}, depths)+\
-           get_config('max_depth', {'n_estimators':512}, depths)
-
+           get_config('max_depth', {'n_estimators':512}, depths)+\
+           get_config('n_estimators', {'max_depth': 2}, estimators) 
 
 def logreg_lib(nrow, ncol):
-    Cs = get_grid(
-        'continuous', 
-        'sample', 
-        prior='loguniform', low=1e-8, high=1e+8, numval=100)
+    Cs = get_grid('continuous', 'sample', prior='loguniform', low=1e-8, high=1e+8, numval=100)
+    
     return get_config('C', {'penalty': 'l1'}, Cs)+\
            get_config('C', {'penalty': 'l2'}, Cs)
-
     
 def adaboost_lib(nrow, ncol):
-    max_feats = [
-        f for f in list(range(1,51)) if f<=ncol]
-    grid = get_grid('discrete', 
-                    'take', 
-                    values=max_feats)
-    return get_config(
-        'base_estimator__max_features', 
+    max_feats = [f for f in list(range(1,51)) if f<=ncol]
+    grid = get_grid('discrete', 'take', values=max_feats)
+    
+    return get_config('base_estimator__max_features', 
         {'n_estimators': 128, 'base_estimator__criterion': 'gini'}, grid)+\
-           get_config(
-        'base_estimator__max_features', 
+           get_config('base_estimator__max_features', 
         {'n_estimators': 256, 'base_estimator__criterion': 'entropy'}, grid)
 
-
 def nearest_neighbors_lib(nrow, ncol):
-    num_neighbors = [
-        v for v in (1, 3, 5, 7, 9, 11, 13, 
-                    15, 17, 19, 21, 23, 25, 
-                    27, 29, 31) if v<nrow]
-    neighbors = get_grid('discrete', 
-                         'take', 
-                         values=num_neighbors)  
+    num_neighbors = [v for v in (int(2*n+1) for n in range(1,31)) if v<nrow]
+    neighbors = get_grid('discrete', 'take', values=num_neighbors)
+    
     return get_config('n_neighbors', {'weights': 'distance'}, neighbors)+\
            get_config('n_neighbors', {'weights': 'uniform'}, neighbors) 
-
     
 def naive_bayes_lib(nrow, ncol):
-    alphas = get_grid(
-        'continuous', 
-        'sample', 
-        prior='uniform', low=0., high=1., numval=20)
-    return get_config('alpha', {'fit_prior':True}, alphas)
-
+    alphas = get_grid('continuous', 'sample', prior='uniform', low=0., high=1., numval=20)
+    return get_config('alpha', {'fit_prior': True}, alphas)+\
+           get_config('alpha', {'fit_prior': False}, alphas)
+    
+def gaussian_naive_bayes():
+    return get_config('priors', {}, get_grid('discrete', 'take', values=[None]))
 
 def random_forest_lib(nrow, ncol):
-    max_feats = [
-        f for f in list(range(1, 51)) if f<=ncol]
-    maxfeats = get_grid('discrete', 
-                    'take', 
-                    values=max_feats)
-    return get_config('max_features', {'n_estimators': 1024, 'criterion':'gini'}, maxfeats)+\
-           get_config('max_features', {'n_estimators': 1024, 'criterion':'entropy'}, maxfeats)
+    max_feats = [f for f in list(range(1, 51)) if f<=ncol]
+    maxfeats = get_grid('discrete', 'take', values=max_feats)
+    
+    return get_config('max_features', {'n_estimators': 512, 'criterion':'gini'}, maxfeats)+\
+           get_config('max_features', {'n_estimators': 512, 'criterion':'entropy'}, maxfeats)
 
 def svm_lib():
-    alphas = get_grid(
-        'continuous', 
-        'sample', 
-        prior='loguniform', low=1e-8, high=1e+8, numval=100)
+    alphas = get_grid('continuous', 'sample', prior='loguniform', low=1e-8, high=1e+8, numval=100)
+    
     return get_config('model__alpha', {'model__penalty': 'l1'}, alphas)+\
            get_config('model__alpha', {'model__penalty': 'l2'}, alphas)
 
-
-def decision_tree_lib():
-    pass
-
+def gradient_descent_lib():
+    alphas = get_grid('continuous', 'sample', prior='loguniform', low=1e-8, high=1e+8, numval=100)
+    
+    return get_config('alpha', {'penalty': 'l2', 'max_iter': 10}, alphas)+\
+           get_config('alpha', {'penalty': 'l1', 'max_iter': 25}, alphas)
+    
+def decision_tree_lib(nrow, ncol):
+    max_feats = get_grid('continuous', 'sample', prior='uniform', low=0.15, high=0.95, numval=100)
+    depths = get_grid('discrete', 'take', values=list(range(1,21)))
+    return get_config('max_features', {}, max_feats)+\
+           get_config('max_depth', {}, depths) 
+    
+    
 
 def neuralnet_lib():
     pass

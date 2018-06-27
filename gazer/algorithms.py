@@ -28,6 +28,7 @@ def implemented():
         ('neural_network', 'MetaNeuralNetworkClassifier'),
         ('random_forest', 'MetaRandomForestClassifier'),
         ('svm', 'MetaSVMClassifier'),
+        ('tree', 'MetaDecisionTreeClassifier'),
         ('xgb', 'MetaXGBoostClassifier'),
     ]    
     return algorithms_
