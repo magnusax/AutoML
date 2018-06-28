@@ -51,7 +51,7 @@ class MetaDecisionTreeClassifier(BaseClassifier):
         """
         return [{ 'criterion': ['entropy', 'gini'],
                   'max_depth': randint(2, 51),
-                  'min_samples_split': randint(2,201),
+                  'min_samples_split': randint(2, 201),
                   'min_samples_leaf': randint(2, 201),
                   'max_features': uniform(0.25, 0.95),
                   'class_weight': ['balanced', None] }]

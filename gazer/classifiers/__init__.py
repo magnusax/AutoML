@@ -6,6 +6,7 @@ from .random_forest import *
 from .neural_network import *
 from .sgdescent import *
 from .svm import *
+from .tree import *
 from .xgb import *
 
 __all__ = ['MetaAdaBoostClassifier', 
@@ -18,5 +19,6 @@ __all__ = ['MetaAdaBoostClassifier',
            'MetaNeuralNetworkClassifier',
            'MetaRandomForestClassifier',
            'MetaSVMClassifier',
-           'MetaXGBoostClassifier'
+           'MetaXGBoostClassifier',
+           'MetaDecisionTreeClassifier',
           ]

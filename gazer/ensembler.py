@@ -210,8 +210,9 @@ class GazerMetaEnsembler(object):
         # All relevant data is available in `history`
         history = {}
 
-        for name, clfs in self.ensemble.items():        
-            os.makedirs(os.path.join(save_dir, name))        
+        for name, clfs in self.ensemble.items():
+            path = os.path.join(save_dir, name)
+            os.makedirs(path)        
             ekwargs = kwargs.get(name, {}) 
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
@@ -219,23 +220,155 @@ class GazerMetaEnsembler(object):
                 models = []
                 for idx, estimator in enumerate(tqdm(clfs, desc="{}".format(name), ncols=120)):
                     modelname = "{}_{:04d}train.pkl".format(name,(idx+1))
+                    modelfile = os.path.join(path, modelname)
                     try:
                         estimator.set_params(**ekwargs).fit(X, y)
                     except:
                         _, desc, _ = sys.exc_info()
                         raise NotFittedError("Could not fit: {}".format(desc))
                     try:
-                        joblib.dump(estimator, os.path.join(save_dir, name, modelname))
+                        joblib.dump(estimator, modelfile)
                     except:
-                        raise Exception("Could not pickle: {}".format(modelname))
+                        raise Exception("Could not pickle: {}".format(modelfile))
                     models.append(
-                        (modelname, scorer(estimator.predict(X), y)))
+                        (modelfile, scorer(estimator.predict(X), y)))
             # Return sorted history dict  
             history[name] = sorted(models, key=lambda x: -x[1])
         return history
     
     
-    def hillclimb(self, X_val, y_val, percent_best=10):
-        """Perform hillclimbing on the validation data."""
+    def _unwrap(self):
+        """Convenience method. Take object containing fitted algorithms 
+        and scores and return a sorted list of classifiers:       
+        """
+        ranked = []
+        for _, v in self.orchestrator.items():
+            ranked.append(v)
+        return sorted([x for sublist in ranked for x in sublist], key=lambda x: -x[1])   
     
     
+    def hillclimb(self, X_val, y_val, n_best=0.1, p=0.3, iterations=10, scoring='accuracy'):
+        """
+        Perform hillclimbing on the validation data
+        
+        Parameters:
+        ------------
+            X_val : validation data, shape (n_samples, n_features)
+            
+            y_val : validation labels, shape (n_samples,)
+            
+            n_best : int or float, default: 0.1
+                Specify number (int) or fraction (float) of classifiers
+                to use as initial ensemble. The best will be chosen.
+                
+            p : float, default: 0.3
+                Fraction of classifiers to select for bootstrap
+                
+            iterations : int, default: 10
+                Number of hillclimb iterations to perform
+                
+            scoring : str, default: accuracy
+                The metric to use when hillclimbing
+                
+        """
+        clfs = self._unwrap(self.orchestrator)
+        total = len([c for c,_ in clfs])
+
+        if isinstance(n_best, float):
+            grab = int(n_best*total)
+        elif isinstance(n_best, int):
+            grab = n_best
+        else:
+            raise TypeError("n_best should be int or float.")
+
+        scorer = get_scorer(scoring)
+
+        # Cache predictions
+        pool = []
+        for path, _ in clfs:        
+            clf = joblib.load(path)
+            y_pred = clf.predict(X_val)
+            val_score = scorer(y_pred, y_val)            
+            pool.append((clf, y_pred, val_score))        
+        
+        del clfs
+        
+        # Sort by score on validation set. Add index.
+        pool = [(str(idx), clf, y_pred) for idx, (clf, y_pred, _) 
+                in enumerate(sorted(pool, key=lambda x: -x[2]))]    
+       
+        # Set initial ensemble
+        ensemble = pool[:grab]
+        print("Algorithms in initial ensemble: {}".format(len(ensemble)))
+        
+        weights = {str(idx): 0 for idx,_,_ in pool}    
+        for t in ensemble:
+            weights[t[0]] = 1
+
+        current_score = score(ensemble, weights, y_val, scorer)        
+        print("Initial {}-score: {:.4f}".format(scoring, current_score))
+        
+        # Choose a subset of algorithms to use in bootstrap 
+        algs = random.choices(pool, k=int(self.p*len(pool)))
+        
+        validation_scores = []
+        for it in range(1, iterations+1):
+
+            if it==0:
+                best_idx = None
+                best_score = -float(1e4)
+
+            for alg in algs:
+                test = ensemble.copy()
+                test.append(alg)         
+                idx_ = alg[0]
+                score_ = score(test, weights, y_val, scorer)
+
+                if score_ > best_score:
+                    best_idx = idx_
+                    best_score = score_
+                    best_alg = [alg]
+
+            if best_score >= current_score:        
+                weights[best_idx] += 1
+                ensemble += best_alg
+                current_score = best_score
+
+            print("Iteration: {} \tScore: {:.6f}".format(it, current_score))
+            validation_scores.append((len(ensemble), current_score))
+            
+        # Return the ensemble
+        
+        
+    def score(self, ensemble, weights, y, scorer):
+        """Compute weighted majority vote 
+        """
+        wts = np.zeros(len(ensemble))
+        preds = np.zeros((len(y), len(ensemble)), dtype=int)
+        for j, (idx, _, pred) in enumerate(ensemble):
+            wts[j] = float(weights[idx])
+            preds[:, j] = pred
+        return self._weighted_vote_score(wts, preds, y, scorer)
+
+    
+    def _weighted_vote_score(self, wts, preds, y, scorer):  
+        """Score an ensemble of classifiers using weighted voting
+        """
+        y_hat = np.zeros(len(y))
+        for i in range(preds.shape[0]):
+            classes = np.unique(preds[i,:])
+
+            # If all classifiers agree
+            if len(classes) == 1:
+                y_hat[i] = np.int8(classes[0])
+
+            # If disagreement; then apply weighted voting
+            elif len(classes)>1:
+                conviction = []
+                for cls in classes:
+                    ind = (preds[i,:] == cls)
+                    conviction.append((cls, np.sum(wts[ind])))
+                label = np.int8(sorted(conviction, key=lambda x: -x[1])[0][0])
+                y_hat[i] = label
+                
+        return scorer(y_hat, y)
