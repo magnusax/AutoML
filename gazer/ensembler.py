@@ -329,9 +329,15 @@ class GazerMetaEnsembler(object):
                     best_score = score_
                     best_alg = [alg]
 
-            if best_score >= current_score:        
+            if best_score >= current_score: 
+                
+                # We only add a new algorithm if not previously in ensemble
+                # If it is contained in the ensemble, then increasing its
+                # weight will suffice in order to take the effect into account
+                if not best_alg in ensemble:
+                    ensemble += best_alg
+
                 weights[best_idx] += 1
-                ensemble += best_alg
                 current_score = best_score
 
             print("Iteration: {} \tScore: {:.6f}".format(it, current_score))
