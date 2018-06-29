@@ -326,10 +326,19 @@ class GazerMetaEnsembler(object):
                 best_score = -float(1e4)
 
             for alg in algs:
-                test = ensemble.copy()
-                test.append(alg)         
+                
                 idx_ = alg[0]
-                score_ = self.score(test, weights, y_val, scorer)
+                
+                # Copy ensemble and add algorithm
+                tst_ens = ensemble.copy()
+                tst_ens.append(alg)         
+                
+                # Copy ensemble weights and add +1 in weight
+                # to take the new addition into account
+                tst_wts = weights.copy()
+                tst_wts[idx_] += 1
+                
+                score_ = self.score(tst_ens, tst_wts, y_val, scorer)
 
                 if score_ > best_score:
                     best_idx = idx_
@@ -355,20 +364,23 @@ class GazerMetaEnsembler(object):
         
         
     def score(self, ensemble, weights, y, scorer):
-        """Compute weighted majority vote 
-        """
+        """ Compute weighted majority vote """
+        
         wts = np.zeros(len(ensemble))
         preds = np.zeros((len(y), len(ensemble)), dtype=int)
+        
         for j, (idx, _, pred) in enumerate(ensemble):
             wts[j] = float(weights[idx])
             preds[:, j] = pred
+        
         return self._weighted_vote_score(wts, preds, y, scorer)
 
     
     def _weighted_vote_score(self, wts, preds, y, scorer):  
-        """Score an ensemble of classifiers using weighted voting
-        """
+        """ Score an ensemble of classifiers using weighted voting """
+        
         y_hat = np.zeros(len(y))
+        
         for i in range(preds.shape[0]):
             classes = np.unique(preds[i,:])
 
