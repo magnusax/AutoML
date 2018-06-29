@@ -3,6 +3,7 @@ from __future__ import print_function
 import os
 import sys
 import copy
+import random
 import warnings
 import numpy as np
 
@@ -271,7 +272,8 @@ class GazerMetaEnsembler(object):
                 The metric to use when hillclimbing
                 
         """
-        clfs = self._unwrap(self.orchestrator)
+        clfs = self._unwrap()
+    
         total = len([c for c,_ in clfs])
 
         if isinstance(n_best, float):
@@ -285,18 +287,23 @@ class GazerMetaEnsembler(object):
 
         # Cache predictions
         pool = []
+        val_scores_check = []
         for path, _ in clfs:        
             clf = joblib.load(path)
             y_pred = clf.predict(X_val)
             val_score = scorer(y_pred, y_val)            
-            pool.append((clf, y_pred, val_score))        
+            pool.append((clf, y_pred, val_score))
+            val_scores_check.append(val_score)
         
         del clfs
+        
+        print("Max validation score = ", max(val_scores_check))
+        ####return val_scores_check
         
         # Sort by score on validation set. Add index.
         pool = [(str(idx), clf, y_pred) for idx, (clf, y_pred, _) 
                 in enumerate(sorted(pool, key=lambda x: -x[2]))]    
-       
+    
         # Set initial ensemble
         ensemble = pool[:grab]
         print("Algorithms in initial ensemble: {}".format(len(ensemble)))
@@ -305,16 +312,16 @@ class GazerMetaEnsembler(object):
         for t in ensemble:
             weights[t[0]] = 1
 
-        current_score = score(ensemble, weights, y_val, scorer)        
+        current_score = self.score(ensemble, weights, y_val, scorer)        
         print("Initial {}-score: {:.4f}".format(scoring, current_score))
         
         # Choose a subset of algorithms to use in bootstrap 
-        algs = random.choices(pool, k=int(self.p*len(pool)))
+        algs = random.choices(pool, k=int(p*len(pool)))
         
         validation_scores = []
         for it in range(1, iterations+1):
 
-            if it==0:
+            if it==1:
                 best_idx = None
                 best_score = -float(1e4)
 
@@ -322,7 +329,7 @@ class GazerMetaEnsembler(object):
                 test = ensemble.copy()
                 test.append(alg)         
                 idx_ = alg[0]
-                score_ = score(test, weights, y_val, scorer)
+                score_ = self.score(test, weights, y_val, scorer)
 
                 if score_ > best_score:
                     best_idx = idx_
@@ -341,9 +348,10 @@ class GazerMetaEnsembler(object):
                 current_score = best_score
 
             print("Iteration: {} \tScore: {:.6f}".format(it, current_score))
-            validation_scores.append((len(ensemble), current_score))
+            validation_scores.append((it, current_score))
             
         # Return the ensemble
+        return validation_scores
         
         
     def score(self, ensemble, weights, y, scorer):

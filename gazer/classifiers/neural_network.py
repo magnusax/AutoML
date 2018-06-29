@@ -282,4 +282,5 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
                 batch_size = self.network['batch_size'], 
                 epochs = self.network['epochs'],
                 callbacks = self.network['callbacks'],
+                verbose = 0,
                 **kwargs)     
