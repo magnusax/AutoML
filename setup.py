@@ -14,11 +14,13 @@ setup(
   classifiers=[
     'Development Status :: 3 - Alpha',
     'Intended Audience :: Developers',
-    'Topic :: Software Development :: Machine Learning',
+    'Topic :: Software Development',
+    'Topic :: Scientific/Engineering',
     'License :: OSI Approved :: MIT License',
     'Programming Language :: Python :: 3.4',
     'Programming Language :: Python :: 3.5',
     'Programming Language :: Python :: 3.6'],
     
   packages=find_packages(),
+  python_requires='>=3.4',
 )

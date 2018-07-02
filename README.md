@@ -9,8 +9,8 @@ building and Markov Chain Monte Carlo (MCMC) like optimization algorithms (see f
 The project is still in its infancy, and fairly basic functionality has been implemented; but it is currently 
 under active development (conditional on time and energy).
 
-Install will (shortly) be available through the python package index `pip install gazer` (dev version). Currently 
-tested for python versions `>=3.4` only. 
+Install is now available through the python package index. Run `pip install gazer==0.1.dev1` to install development version.
+Currently tested for python versions `>=3.4` only. 
 
 ### Using the library
 The entrance to functionality is the **GazerMetaLearner** object;
