@@ -23,13 +23,15 @@ from keras.callbacks import (
 from keras.layers import (
         Activation, 
         BatchNormalization, 
-        Dense, Dropout)
+        Dense, 
+        Dropout)
 
 
 class MetaNeuralNetworkClassifier(BaseClassifier):
     
     def __init__(self, epochs=50, batch_size=32, optimizer='adam', learning_rate=1e-3, 
-                 n_hidden=2, p=0.1, dropout=True, batch_norm=False, decay_units=False, input_units=250):
+                 n_hidden=2, p=0.1, dropout=True, batch_norm=False, decay_units=False, 
+                 input_units=250, chkpnt_dir=''):
     
         """
         Parameters:
@@ -72,8 +74,13 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
             input_units : integer, default: 250
                 The number of units (neurons) to use in the input layer.
                 
+            chkpnt_dir : str, default: ''
+                The directory to save model checkpoints (only weights are saved).
+                
         """
         self.name = 'neuralnet'
+        
+        self.chkpnt_dir = chkpnt_dir
         
         # We need to know the shape of the data, and the number of classes
         # They are set prior to calling `fit` through a call to `set_architecture`
@@ -117,19 +124,25 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
     
     
     def get_info(self):
-        return {'does_classification': True,
-                'does_multiclass': True,
-                'does_regression': False, 
-                'predict_probas': True}
+        return {
+            'does_classification': True,
+            'does_multiclass': True,
+            'does_regression': False, 
+            'predict_probas': True, 
+            'ensemble': False }
     
+    
+    def set_param(self, param, value):
+        super().set_param(param, value)
+        
             
-    def set_architecture(self, input_shape, output_shape):
+    def _set_architecture(self, input_shape, output_shape):
         """
         Called prior to building and compiling the keras model.
         """
         # Handle different representations
         if isinstance(input_shape, collections.Iterable):
-            self.input_shape = (*input_shape,)
+            self.input_shape = input_shape
         else:
             self.input_shape = (input_shape,)
             
@@ -196,25 +209,28 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
                                     % (100*train_size, total_time/60.))
         
         
-    def _callbacks(self):
-        """
-        Implement callbacks.
-        """
+    def _callbacks(self, **kwargs):
+        """ Implement callbacks """
+                
         # Reduce learning rate on plateau
-        reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=10, min_lr=1e-5)
+        reduce_lr = ReduceLROnPlateau(
+            monitor='val_loss', factor=0.25, patience=5, min_lr=1e-5)
         
         # Early stopping
-        early_stop = EarlyStopping(monitor='val_loss', min_delta=0.0001, patience=50)
+        early_stop = EarlyStopping(
+            monitor='val_loss', min_delta=0.0001, patience=25)
         
-        # Checkpointing
-        filepath = os.path.join(os.getcwd(), "tmp")
-        if not os.path.exists(filepath):
-            os.makedirs(filepath)
-        filepath = os.path.join(filepath, "weights.{epoch:02d}_{loss:.2f}.hdf5")              
-        checkpointing = ModelCheckpoint(filepath, monitor='val_loss', save_best_only=False, 
-                                        save_weights_only=True, period=10)           
+        # Checkpointing                    
+        weightsfile = "weights.{epoch:02d}_{loss:.2f}.hdf5"
+        weightspath = os.path.join(self.chkpnt_dir, weightsfile)
         
-        return[reduce_lr, early_stop]
+        checkpointing = ModelCheckpoint(weightspath, 
+                                        monitor='val_loss', 
+                                        save_best_only=False, 
+                                        save_weights_only=True, 
+                                        period=1)           
+        
+        return [reduce_lr, early_stop, checkpointing]
     
     
     def lr_finder(self, X, y, monitor='acc', step_size=2000):
@@ -271,7 +287,7 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
         # a recompilation of the model (i.e. you don't need to start from scratch!)
         if self.ready == False:
             # Freeze architecture
-            self.set_architecture(X.shape[1], y_.shape[1])
+            self._set_architecture(X.shape[1], y_.shape[1])
             
             # Define estimator and compile keras model
             self.estimator = self._get_clf()

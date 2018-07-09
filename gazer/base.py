@@ -1,14 +1,27 @@
 """
 Module containing definitions of base Classes.
+
 """
+
 import random  
 import warnings
 
+
 class BaseClassifier():
+    
     
     def __init__(self):
         """Base class for all tunable classifiers"""
         self.__classname__ = 'BaseClassifier'
+    
+    
+    def set_param(self, param, value):
+        if not hasattr(self, param):
+            raise Exception("{} does not have property {}"
+                            .format(self.name, param))
+        setattr(self, param, value)
+        return self
+   
     
     def adjust_params(self, params):
         """ Adjust classifier parameter helper function """
@@ -26,6 +39,7 @@ class BaseClassifier():
         self.estimator.set_params(**params)
         return self
     
+    
     def freeze_cv_params(self, param):
         """ Freeze a trainable parameter to fixed value. Useful for when grid searching """
         if not isinstance(param, dict):
@@ -36,31 +50,30 @@ class BaseClassifier():
         return self
 
 
-    def set_tune_params(self, params, num_params=1, mode='random', keys=list()):
+    def set_tune_params(self, params, num_params, mode, keys):
         """
-
         Parameters:
         ------------
 
-	params :
-	    dictionary containing all hyperparameters belonging to classifier
+            params :
+                dictionary containing all hyperparameters belonging to classifier
 
-	num_params :
-	    integer specifying number of parameters to sample if mode=='random'
+            num_params :
+                integer specifying number of parameters to sample if mode=='random'
 
-	mode :
-	    str, values: 'random' (sample) or 'select' (choose)
+            mode :
+                str, values: 'random' (sample) or 'select' (choose)
 
-	keys :
-	    list of keys (subsample of keys contained in 'params'
+            keys :
+                list of keys (subsample of keys contained in 'params'
 
 
         Returns:
-        --------
-     	Dictionary containing parameters to train
-
-
-	"""
+        ---------
+             Dictionary containing parameters to train
+        
+        """
+        
         if not isinstance(params, dict):
             raise TypeError("Expected 'dict' type. Got '%s'" % type(params))
         if not mode in ('random', 'select'):

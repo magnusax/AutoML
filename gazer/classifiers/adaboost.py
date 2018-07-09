@@ -56,26 +56,26 @@ class MetaAdaBoostClassifier(EnsembleBaseClassifier):
         """
         _base_estimator = self.init_params['base_estimator']
         
-        ad = {'n_estimators': [50, 100, 200],
-              'learning_rate': [0.1, 0.05, 0.01]}
+        ada = {'n_estimators': [50, 100, 200],
+               'learning_rate': [0.1, 0.05, 0.01]}
         
         if isinstance(_base_estimator, type(DecisionTreeClassifier())):
-            be = {'base_estimator__criterion': ['gini', 'entropy'],
-                  'base_estimator__max_depth': randint(1, 8), # Do not let it go too deep
-                  'base_estimator__min_samples_leaf': randint(2, 20),
-                  'base_estimator__max_features': [0.1, 'auto', 'log2'],
-                  'base_estimator__class_weight': ['balanced', None]}
+            base = {'base_estimator__criterion': ['gini', 'entropy'],
+                    'base_estimator__max_depth': randint(1, 8), # Do not let it go too deep
+                    'base_estimator__min_samples_leaf': randint(2, 20),
+                    'base_estimator__max_features': [0.1, 'auto', 'log2'],
+                    'base_estimator__class_weight': ['balanced', None]}
         
         # Tends to overfit: maybe use weak learners only, or perhaps skip 
         # parameter tuning entirely
         elif isinstance(_base_estimator, type(LogisticRegression())): 
-            be = {'base_estimator__C': uniform(0, 1000),
-                  'base_estimator__fit_intercept': [True, False],
-                  'base_estimator__penalty': ['l1', 'l2']} 
+            base = {'base_estimator__C': uniform(0, 1000),
+                    'base_estimator__fit_intercept': [True, False],
+                    'base_estimator__penalty': ['l1', 'l2']} 
         else:
-            be = {} # base estimator specific options not implemented for other classifiers
+            base = {} # base estimator specific options not implemented for other classifiers
         
         # This procedure is consistent and likely "version proof".
-        params = ad.copy()
-        params.update(be) # Mutates dict (returns None)
+        params = ada.copy()
+        params.update(base) # Mutates dict (returns None)
         return [params]

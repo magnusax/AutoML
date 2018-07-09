@@ -131,25 +131,34 @@ class GazerMetaLearner():
         return algorithms
 
     def _add_algorithm(self, module_name, algorithm_name):                     
-        """ Import classifier algorithms 
-        """        
+        """ Import classifier algorithms """
+        
+        if not __package__:
+            __package__ == __name__        
         module_path = ".".join((__package__, "classifiers", module_name))        
         try:           
             module = import_module(module_path, package=True)
-        except ImportError: 
-            warnings.warn("Could not import module %s: \n%s" 
-                          % (module_name, sys.exc_info()[1]))
-            return (None, None)
+        except:
+            try:
+                module = import_module(module_path, package=False)
+            except ImportError: 
+                warnings.warn("Could not import module %s: \n%s" 
+                              % (module_name, sys.exc_info()[1]))
+                return (None, None)
         
         algorithm = getattr(module, algorithm_name)        
+        
         if issubclass(algorithm, EnsembleBaseClassifier):
-            instance = algorithm(base_estimator=self.base_estimator, 
-                                 random_state=self.random_state)            
+            instance = algorithm(
+                base_estimator=self.base_estimator, 
+                random_state=self.random_state)            
+        
         elif issubclass(algorithm, BaseClassifier):
             if hasattr(algorithm(), 'random_state'):
                 instance = algorithm(random_state=self.random_state)
             else:
-                instance = algorithm()                
+                instance = algorithm()
+                
         return instance.name, instance
     
     

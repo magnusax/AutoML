@@ -78,20 +78,33 @@ class GazerMetaEnsembler(object):
 
         Returns:
         ---------
-        Dictionary : (algorithm[str]: classifiers[list])
+        Dictionary : (algorithm[str]: classifiers[list]) 
         Dictionary containing name keys with corresponding values being
         a list of possible learners with varying settings of hyperparameters.
         
         """
         lib = library_config(self.learner.names, *self.data_shape)
-        return {name: self._gen_templates(name, grid) for name, grid in lib}
-
+        
+        build = {}
+        
+        for name, grid in lib:
+            
+            # Check metadata: can we generate templates or not?
+            meta_info = self.learner.clf[name].get_info()
+            ensemble_or_not = meta_info.get('ensemble', True)
+            
+            if ensemble_or_not == False:
+                clf = self.learner.clf[name]
+                build[name] = (clf.estimator, clf.kwargs)
+            else:
+                build[name] = self._gen_templates(name, grid)
+            
+        return build
     
     def _gen_templates(self, name, params):    
         """Here we generate estimators to later fit."""
         learner = GazerMetaLearner(
-            method='selected', 
-            estimators=[name])
+            method='selected', estimators=[name])
         clf = learner._get_algorithm(name)
         del learner
 
@@ -308,7 +321,7 @@ class GazerMetaEnsembler(object):
         ensemble = pool[:grab]
         print("Algorithms in initial ensemble: {}".format(len(ensemble)))
         
-        weights = {str(idx): 0 for idx,_,_ in pool}    
+        weights = {idx: 0 for idx,_,_ in pool}    
         for t in ensemble:
             weights[t[0]] = 1
 
@@ -318,6 +331,7 @@ class GazerMetaEnsembler(object):
         # Choose a subset of algorithms to use in bootstrap 
         algs = random.choices(pool, k=int(p*len(pool)))
         
+        patience = 0
         validation_scores = []
         for it in range(1, iterations+1):
 
@@ -344,7 +358,7 @@ class GazerMetaEnsembler(object):
                     best_idx = idx_
                     best_score = score_
                     best_alg = [alg]
-
+                        
             if best_score >= current_score: 
                 
                 # We only add a new algorithm if not previously in ensemble
@@ -355,9 +369,16 @@ class GazerMetaEnsembler(object):
 
                 weights[best_idx] += 1
                 current_score = best_score
-
+                
             print("Iteration: {} \tScore: {:.6f}".format(it, current_score))
             validation_scores.append((it, current_score))
+            
+            if best_score == current_score:
+                patience += 1
+            elif best_score > current_score:
+                patience = 0
+            if patience == 10:
+                break
             
         # Return the ensemble
         return validation_scores
