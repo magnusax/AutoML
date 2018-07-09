@@ -2,6 +2,7 @@ from __future__ import print_function
 
 import os
 import sys
+import glob
 import copy
 import time
 import random
@@ -108,12 +109,9 @@ class GazerMetaEnsembler(object):
 
     
     def _gen_templates(self, name, params):    
-        """Here we generate estimators to later fit."""
-        learner = GazerMetaLearner(
-            method='selected', estimators=[name])
-        clf = learner._get_algorithm(name)
-        del learner
-
+        """ Here we generate estimators to later fit """
+        
+        clf = self.learner._get_algorithm(name)
         estimators = []
         for param in params:
             par = param['param']
@@ -126,7 +124,7 @@ class GazerMetaEnsembler(object):
                 try:
                     estimator.set_params(**pars)
                 except:
-                    warnings.warn("Failed to set: %s" % par)
+                    warnings.warn("Failed to set {}".format(par))
                     continue
                 estimators.append(estimator)
                 del estimator                    
@@ -137,20 +135,19 @@ class GazerMetaEnsembler(object):
         """ Generate a config grid. """
         method = grid.get('method', None)
         assert method in ('take', 'sample') 
-        
-        if method=='sample':
-            category = grid.get('category', None)        
-            assert category in ('discrete', 'continuous')
 
         if method=='take':
             return grid['values']
 
-        elif method=='sample':                
+        elif method=='sample':  
+            category = grid.get('category', None)        
+            assert category in ('discrete', 'continuous')
+            
             low, high, points, prior = (
                 grid['low'], grid['high'], grid['numval'], grid['prior'])
 
             if category=='discrete':
-                raise ValueError('Discrete sampling not implemented.')                   
+                raise NotImplementedError('Discrete sampling not implemented yet.')                   
 
             elif category=='continuous':                                  
                 if prior=='loguniform':
@@ -226,7 +223,7 @@ class GazerMetaEnsembler(object):
                                       save_dir=save_dir, 
                                       scorer=scorer, 
                                       **kwargs)
-        return self
+        return
     
         
     def _fit(self, X, y, save_dir, scorer, **kwargs):
@@ -243,16 +240,7 @@ class GazerMetaEnsembler(object):
             ekwargs = kwargs.get(name, {})
             
             if name=='neuralnet':
-                clfs.set_param('chkpnt_dir', path) 
-                clfs.set_param('ensemble', True)
-                print("Training neural net..")
-                
-                start = time.time()
-                clfs.fit(X, y, verbose=1)
-                
-                print("Train time: {:.2f} min."
-                      .format((time.time()-start)/60.))
-                
+                history[name] = self._add_networks(clfs, X, Y, path)                
             else:            
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore")
@@ -277,6 +265,45 @@ class GazerMetaEnsembler(object):
         
         return history
     
+    def _add_networks(self, clf, X, Y, path):
+        """Add to ensemble repository a set of keras neural network
+        models
+        
+        """
+        # Prepare for ensembling
+        clf.set_param('chkpnt_dir', path) 
+        
+        # When 'ensemble' is set to True, 
+        # checkpointing to the 'path' folder is enabled
+        clf.set_param('ensemble', True) 
+        
+        # Train
+        print("Training neural net..")
+                
+        start = time.time()
+        clf.fit(X, y, verbose=1)
+                
+        print("Train time: {:.2f} min".format((time.time()-start)/60.))
+                
+        # Evaluate and save 
+        patterns = ('*.hdf5', '*.h5')
+        weightfiles = []
+        for pattern in patterns:
+            weightfiles += glob.glob(os.path.join(path, pattern))
+        
+        model = clf.estimator
+        models = []
+        
+        for weightfile in tqdm(
+            weightfiles, desc="{}".format(name), ncols=120): 
+            model.load_weights(weightfile)
+            loss, score = model.evaluate(X, y)
+            models.append(
+                (weightfile, np.round(loss, decimals=4)))
+            
+        # We sort according to loss: lower is better
+        return sorted(models, key=lambda x: x[1])
+   
     
     def _unwrap(self):
         """Convenience method. Take object containing fitted algorithms 
