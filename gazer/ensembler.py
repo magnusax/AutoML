@@ -400,6 +400,7 @@ class GazerMetaEnsembler(object):
             print("Iteration: {} \tScore: {:.6f}".format(it, current_score))
             validation_scores.append((it, current_score))
             
+            
             if best_score <= current_score:
                 impatience += 1
             elif best_score > current_score:

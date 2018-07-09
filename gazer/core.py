@@ -10,6 +10,11 @@ from skopt import gp_minimize
 from sklearn.preprocessing import LabelBinarizer
 from sklearn.model_selection import cross_val_score, RandomizedSearchCV
 
+try:
+    from keras.utils import to_categorical
+except ImportError:
+    warnings.warn("Cannot import keras")
+    
 from .base import EnsembleBaseClassifier, BaseClassifier
 from .algorithms import implemented        
 from .utils import skopt_space_mapping
@@ -231,28 +236,24 @@ class GazerMetaLearner():
         return probas
     
 
-    def evaluate(self, preds, y_true, metric=None, multiclass=None, **kwargs):
+    def evaluate(self, X, y, metric='accuracy', get_loss=True, **kwargs):
         """
-        Evalute predictions (preds) against ground truth (y_true) using scikit-learn metrics
+        Evalute predictions (preds) against ground truth (y_true) 
+        using scikit-learn metrics
  
         Input:
         -------
 
-        preds :       
-            a list of (name (str), array-of-predictions (iterable)) tuples 
-            (default output from 'predict' method)
-            E.g.: [('my_classifier1', np.array(...)), ('my_classifier2', np.array(...)), ... ]  
+        X :       
+            a matrix-like object of shape (n_samples, n_features)
+            - The data we wish to predict on
 
-        y_true :      
-            an array (iterable) of ground truth labels
+        y :      
+            an array (iterable) of ground truth labels. Shape: (n_samples,)
 
         metric :      
             a label (str) that indicates type of metric to use 
             (accuracy, auc, f1, recall, precision, log_loss). 
-            Must be set.
-
-        multiclass :  
-            True or False. Indicate if this is a multiclass problem or not. 
             Must be set.
         
         Output:
@@ -261,53 +262,57 @@ class GazerMetaLearner():
             A list of 3-tuples (one for each algorithm) in the following form: 
             (classifier: name, classifier: metric performance, classifier: log loss)
         """
+        y_preds = self.predict(X)
         
+        if get_loss:
+            log_loss = get_scorer('log_loss')
+            probas = self.predict_proba(X)
+                
         if metric is None:
             raise ValueError("Please specify a metric")
         
-        if multiclass is None:
-            raise ValueError("Please specify if multiclass or not (bool)")
-        
         # Desired scorer
         scorer = get_scorer(metric)
-        
-        # We need the log loss as well
-        log_loss = get_scorer('log_loss')
-        
+               
         # Keep track of score for every algorithm
         scores = {}
-        for name, y_pred in preds:
+        for name, y_pred in y_preds:
             
-            # Handle keras model output
+            # Use keras api for convenience
             if name == 'neuralnet':
-                y_pred = np.array(
-                    [max(enumerate(probs), key=itemgetter(1))[0] 
-                     for probs in y_pred])
+                y_ = to_categorical(y.reshape(-1, 1))
+                loss, score = self.clf[name].estimator.evaluate(X, y_)
+                scores[name] = {"score": np.round(score, decimals=4), 'loss': np.round(loss, decimals=4)}
+                del y_
+                continue
                 
-            score_ = scorer(y_true, y_pred)
+            score = scorer(y, y_pred)            
+            loss = np.nan
+            probabilities = self.clf[name].get_info()['predict_probas']
             
-            if multiclass and len(np.array(y_pred).shape) == 1:
-                lb = LabelBinarizer()
-                y_hat = lb.fit_transform(y_pred)
-            else:
-                y_hat = np.array(y_pred)
-            lg_loss_ = log_loss(y_true, y_hat)            
-            scores[name] = {metric+" score": score_, 'log loss score': lg_loss_}                        
+            if get_loss and probabilities:
+                try:
+                    y_proba = [x for nme, x in probas if nme==name][0]
+                    loss = log_loss(y, y_proba)  
+                except:
+                    warnings.warn("Could not compute log-loss for {}".format(name), RuntimeWarning)                               
+            scores[name] = {"score": np.round(score, decimals=4), 'loss': np.round(loss, decimals=4)}                        
         
         if self.verbose>0:
             for name, dscore in scores.items():
-                lg_loss = dscore['log loss score']
-                score = dscore[metric+" score"]
+                loss = dscore['loss']
+                score = dscore['score']
                 print("%s performance:\n\t Log-loss: %.4f \n\t Score: %.4f" 
-                      % (name, lg_loss, score))
+                      % (name, loss, score))
+        
         return scores
     
 
     def crossval_optimize(self, X, y, n_iter=12, scoring='accuracy', cv=10, 
                           n_jobs=1, sample_hyperparams=False, 
                           min_hyperparams=None, get_hyperparams=False, random_state=None):
-        
         """
+        
         This method is a wrapper to cross validation using RandomizedSearchCV from scikit-learn, 
         wherein we optimize each defined algorithm
         
