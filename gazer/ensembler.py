@@ -3,6 +3,7 @@ from __future__ import print_function
 import os
 import sys
 import copy
+import time
 import random
 import warnings
 import numpy as np
@@ -83,23 +84,28 @@ class GazerMetaEnsembler(object):
         a list of possible learners with varying settings of hyperparameters.
         
         """
-        lib = library_config(self.learner.names, *self.data_shape)
-        
+        lib = library_config(self.learner.names, *self.data_shape)        
         build = {}
-        
         for name, grid in lib:
             
             # Check metadata: can we generate templates or not?
             meta_info = self.learner.clf[name].get_info()
-            ensemble_or_not = meta_info.get('ensemble', True)
+            standard_ensemble = meta_info.get('standard_ensemble', True)
             
-            if ensemble_or_not == False:
-                clf = self.learner.clf[name]
-                build[name] = (clf.estimator, clf.kwargs)
+            if not standard_ensemble:
+                clf = self.learner.clf[name] 
+                
+                if name == 'neuralnet':
+                    for k, v in grid.items():
+                        if isinstance(clf.network[k], dict):
+                            clf.network[k].update(v)
+                        else:
+                            clf.network[k] = v               
+                build[name] = clf
             else:
-                build[name] = self._gen_templates(name, grid)
-            
+                build[name] = self._gen_templates(name, grid)            
         return build
+
     
     def _gen_templates(self, name, params):    
         """Here we generate estimators to later fit."""
@@ -210,6 +216,12 @@ class GazerMetaEnsembler(object):
         # Get the scorer method
         scorer = get_scorer(scoring)
 
+        # We want to train the network first, if present
+        names = list(self.ensemble.keys())
+        if 'neuralnet' in names:
+            names.insert(0, names.pop(names.index('neuralnet')))
+            self.ensemble = {name: self.ensemble[name] for name in names}
+        
         self.orchestrator = self._fit(X=X, y=y, 
                                       save_dir=save_dir, 
                                       scorer=scorer, 
@@ -223,31 +235,46 @@ class GazerMetaEnsembler(object):
         # Keep track of model and scores in `models`
         # All relevant data is available in `history`
         history = {}
-
+        
         for name, clfs in self.ensemble.items():
+            
             path = os.path.join(save_dir, name)
             os.makedirs(path)        
-            ekwargs = kwargs.get(name, {}) 
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
+            ekwargs = kwargs.get(name, {})
+            
+            if name=='neuralnet':
+                clfs.set_param('chkpnt_dir', path) 
+                clfs.set_param('ensemble', True)
+                print("Training neural net..")
+                
+                start = time.time()
+                clfs.fit(X, y, verbose=1)
+                
+                print("Train time: {:.2f} min."
+                      .format((time.time()-start)/60.))
+                
+            else:            
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
 
-                models = []
-                for idx, estimator in enumerate(tqdm(clfs, desc="{}".format(name), ncols=120)):
-                    modelname = "{}_{:04d}train.pkl".format(name,(idx+1))
-                    modelfile = os.path.join(path, modelname)
-                    try:
-                        estimator.set_params(**ekwargs).fit(X, y)
-                    except:
-                        _, desc, _ = sys.exc_info()
-                        raise NotFittedError("Could not fit: {}".format(desc))
-                    try:
-                        joblib.dump(estimator, modelfile)
-                    except:
-                        raise Exception("Could not pickle: {}".format(modelfile))
-                    models.append(
-                        (modelfile, scorer(estimator.predict(X), y)))
-            # Return sorted history dict  
-            history[name] = sorted(models, key=lambda x: -x[1])
+                    models = []
+                    for idx, estimator in enumerate(tqdm(clfs, desc="{}".format(name), ncols=120)):
+                        modelname = "{}_{:04d}train.pkl".format(name,(idx+1))
+                        modelfile = os.path.join(path, modelname)
+                        try:
+                            estimator.set_params(**ekwargs).fit(X, y)
+                        except:
+                            _, desc, _ = sys.exc_info()
+                            raise NotFittedError("Could not fit: {}".format(desc))
+                        try:
+                            joblib.dump(estimator, modelfile)
+                        except:
+                            raise Exception("Could not pickle: {}".format(modelfile))
+                        models.append(
+                            (modelfile, scorer(estimator.predict(X), y)))
+                # Return sorted history dict  
+                history[name] = sorted(models, key=lambda x: -x[1])
+        
         return history
     
     

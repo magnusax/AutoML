@@ -82,6 +82,9 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
         
         self.chkpnt_dir = chkpnt_dir
         
+        # Control callbacks (enable checkpointing, etc.)
+        self.ensemble = False
+        
         # We need to know the shape of the data, and the number of classes
         # They are set prior to calling `fit` through a call to `set_architecture`
         self.input_shape, self.output_shape = (None, None)        
@@ -92,6 +95,8 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
         self.network['lr'] = learning_rate
         self.network['optimizer'] = optimizer
         self.network['history'] = None
+        self.network['chkpnt_period'] = 1
+
         
         # Specify architecture
         self.network['n_hidden'] = n_hidden
@@ -115,8 +120,8 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
         else:
             self.network['units'] = [input_units] * (n_hidden+1)
             
-        # Callbacks placeholder
-        self.network['callbacks'] = self._callbacks()
+        # Callbacks placeholder: set just before calling fit
+        self.network['callbacks'] = []
         
         # Estimator is yet to be defined at this stage
         self.estimator = None
@@ -129,7 +134,8 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
             'does_multiclass': True,
             'does_regression': False, 
             'predict_probas': True, 
-            'ensemble': False }
+            'standard_ensemble': False, 
+        }
     
     
     def set_param(self, param, value):
@@ -149,6 +155,7 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
         # The `output_shape` is simply the number of class labels    
         self.output_shape = output_shape
         self.ready = True
+        
         return
         
     
@@ -209,28 +216,30 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
                                     % (100*train_size, total_time/60.))
         
         
-    def _callbacks(self, **kwargs):
+    def _callbacks(self):
         """ Implement callbacks """
                 
         # Reduce learning rate on plateau
         reduce_lr = ReduceLROnPlateau(
-            monitor='val_loss', factor=0.25, patience=5, min_lr=1e-5)
+            monitor='val_loss', factor=0.5, patience=5, min_lr=1e-5)
         
         # Early stopping
         early_stop = EarlyStopping(
-            monitor='val_loss', min_delta=0.0001, patience=25)
+            monitor='val_loss', min_delta=0.0001, patience=20)
         
-        # Checkpointing                    
-        weightsfile = "weights.{epoch:02d}_{loss:.2f}.hdf5"
-        weightspath = os.path.join(self.chkpnt_dir, weightsfile)
+        # Checkpointing        
+        checkpoint = ModelCheckpoint(
+            os.path.join(self.chkpnt_dir, 
+                         'weights.{epoch:02d}_{loss:.2f}.hdf5'), 
+            monitor='val_loss', 
+            save_best_only=False, 
+            save_weights_only=True, 
+            period=self.network['chkpnt_period'])           
         
-        checkpointing = ModelCheckpoint(weightspath, 
-                                        monitor='val_loss', 
-                                        save_best_only=False, 
-                                        save_weights_only=True, 
-                                        period=1)           
-        
-        return [reduce_lr, early_stop, checkpointing]
+        if self.ensemble:
+            return [reduce_lr, checkpoint,]
+        else:
+            return [reduce_lr, early_stop]
     
     
     def lr_finder(self, X, y, monitor='acc', step_size=2000):
@@ -243,7 +252,7 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
             
         if step_size is None:
             # Authors recommend step_size = 2-8 * iterations_per_epoch
-            step_size = 8 * int(np.ceil(X.shape[0]/self.network['batch_size']))
+            step_size = 8 * int(np.ceil(X.shape[0]/float(self.network['batch_size'])))
         clr = CyclicLR(base_lr=1e-6, max_lr=10.0, 
                        step_size=step_size, mode='triangular', lr_find=True)
         
@@ -268,7 +277,7 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
         return (xlr, ylr)
     
     
-    def fit(self, X, y, **kwargs):
+    def fit(self, X, y, verbose=0, **kwargs):
         
         # We keep a local copy of the labels 
         # to avoid modifying the original input data
@@ -277,11 +286,12 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
         if len(y_.shape)==1: y_ = y_.reshape(-1, 1)
         
         if y_.shape[1]==1:
-            warnings.warn(
-                """Keras expects one-hot encoded label data: your data does not seem to fit this requirement.
-                   \nWill attempt to apply one-hot encoding before sending to `fit` method.""")
             y_ = keras.utils.to_categorical(y_)
-        
+            if verbose > 0:
+                warnings.warn(
+                    """Keras expects one-hot encoded label data: your data does not seem to fit this requirement.
+                       \nWill attempt to apply one-hot encoding before sending to `fit` method.""")
+                   
         # This will only happen once as `set_architecture` modifies
         # this variable. Successive calls to `fit` will not cause
         # a recompilation of the model (i.e. you don't need to start from scratch!)
@@ -292,11 +302,14 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
             # Define estimator and compile keras model
             self.estimator = self._get_clf()
         
+        self.network['callbacks'] = self._callbacks()
+        
         self.network['history'] = \
             self.estimator.fit(
                 X, y_, 
-                batch_size = self.network['batch_size'], 
-                epochs = self.network['epochs'],
-                callbacks = self.network['callbacks'],
-                verbose = 0,
+                batch_size=self.network['batch_size'], 
+                epochs=self.network['epochs'],
+                callbacks=self.network['callbacks'],
+                verbose=verbose,
+                validation_split=0.1,
                 **kwargs)     

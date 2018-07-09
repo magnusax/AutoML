@@ -14,8 +14,9 @@ def library_config(names, nrow, ncol):
         'bernoulli_nb': naive_bayes_lib(nrow, ncol),
         'random_forest': random_forest_lib(nrow, ncol),
         'tree': decision_tree_lib(nrow, ncol),
-        'xgboost': xgboost_lib(nrow, ncol) }
-    
+        'xgboost': xgboost_lib(nrow, ncol),
+        'neuralnet': keras_net_lib(), 
+    }
     return list((name, grid) for name, grid in library.items() 
         if (name in names) and (grid is not None))
 
@@ -156,6 +157,25 @@ def decision_tree_lib(nrow, ncol):
            get_config('max_depth', {}, depths) 
     
     
-
-def neuralnet_lib():
-    pass
+def keras_net_lib():
+    """ 
+    The Keras library classifier needs slightly different treatment 
+    if we shall be able to include it in the ensemble library
+    
+    """
+    # Used to set the 'network' dictionary
+    network = {
+        'chkpnt_period': 1,
+        'epochs': 100,
+        'batch_size': 64,}    
+    
+    return network
+    
+    
+    
+    
+    
+    
+    
+    
+    return 

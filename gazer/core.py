@@ -94,7 +94,7 @@ class GazerMetaLearner():
         
         if method=='selected':
             self.clf = {n:c for n,c in self._build_classifier_repository() if n in estimators}
-        else:
+        else: 
             self.clf = self._build_classifier_dict()    
         self.clf = {n:c for n,c in self.clf.items() if not (n in self.exclude)}               
         
@@ -190,13 +190,13 @@ class GazerMetaLearner():
         for name, clf in self.clf.items():
             st = time.time()            
             if hasattr(clf, 'fit'):
-                clf.fit(X, y)
+                clf.fit(X, y, verbose=self.verbose)
             else:
                 if n_jobs>1 and hasattr(clf.estimator, 'n_jobs'):
                     clf.estimator.set_params(**{'n_jobs': n_jobs})
                 clf.estimator.fit(X, y)
             if self.verbose > 0:
-                print("%s: training time=%.2f (min)" 
+                print("%s: training time = %.2f (min)" 
                       % (name, (time.time()-st)/60.))
         return self
     
