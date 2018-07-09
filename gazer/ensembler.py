@@ -358,7 +358,7 @@ class GazerMetaEnsembler(object):
         # Choose a subset of algorithms to use in bootstrap 
         algs = random.choices(pool, k=int(p*len(pool)))
         
-        patience = 0
+        impatience = 0
         validation_scores = []
         for it in range(1, iterations+1):
 
@@ -400,11 +400,12 @@ class GazerMetaEnsembler(object):
             print("Iteration: {} \tScore: {:.6f}".format(it, current_score))
             validation_scores.append((it, current_score))
             
-            if best_score == current_score:
-                patience += 1
+            if best_score <= current_score:
+                impatience += 1
             elif best_score > current_score:
-                patience = 0
-            if patience == 10:
+                impatience = 0
+            # Try 10 times to improve    
+            if impatience == 10:
                 break
             
         # Return the ensemble
