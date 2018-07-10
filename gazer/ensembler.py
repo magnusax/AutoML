@@ -307,7 +307,7 @@ class GazerMetaEnsembler(object):
         del y_
         
         # We sort according to loss: lower is better
-        return (model, sorted(models, key=lambda x: x[1]))
+        return (clf, sorted(models, key=lambda x: x[1]))
    
     
     def _unwrap(self):
@@ -375,11 +375,8 @@ class GazerMetaEnsembler(object):
         val_scores_check = []
         for name, path in clfs:
             if name == 'neuralnet':
-                clf = model.load_weights(path)
-                y_pred = clf.predict(X_val) # shape: (n_samples, n_classes)
-                y_pred = np.array(
-                    [list(l).index(max(list(l))) 
-                     for l in model.predict(X_val)]) # shape: (n_samples,)
+                clf = model.estimator.load_weights(path)
+                y_pred = clf.predict(X_val)
             else:
                 clf = joblib.load(path)
                 y_pred = clf.predict(X_val)                

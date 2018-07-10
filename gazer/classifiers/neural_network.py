@@ -308,3 +308,16 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
                 verbose=verbose,
                 validation_split=0.1,
                 **kwargs)     
+
+            
+    def predict(X):
+        """
+        In some cases we need to override the canonical predict method
+        normally used by keras api.
+        
+        """
+        if self.estimator is not None:
+            y_pred = self.estimator.predict(X)
+            return np.array([list(l).index(max(list(l))) for l in y_pred])
+        else:
+            raise Exception("Call 'fit' first.")
