@@ -12,33 +12,17 @@ from sklearn.preprocessing import LabelBinarizer
 from sklearn.model_selection import (cross_val_score, 
                                      RandomizedSearchCV)
 
+from gazer import __importflags__
+
 from .base import EnsembleBaseClassifier, BaseClassifier
 from .algorithms import implemented        
 from .utils import skopt_space_mapping
 from .metrics import get_scorer
 
+
 if not __package__:
     __package__ = __name__
 
-    
-def __checklib__(lib, alias):
-    try:
-        exec("import {}".format(lib))
-        return True
-    except:
-        warnings.warn("""{} import failed; '{}' 
-        will be unavailable.""".format(lib, alias), RuntimeWarning)
-        return False
-    
-__importflags__ = [__checklib__(lib, alias) for lib, alias in 
-                  [('keras', 'neuralnet'), ('xgboost', 'xgboost')]]
-
-if __importflags__[0]: 
-    import keras
-    
-if __importflags__[1]:
-    import xgboost
-    
     
 class GazerMetaLearner():
     """    
@@ -146,28 +130,27 @@ class GazerMetaLearner():
         
         Update any meta estimator's parameters. For now,
         we first delete the old version of the meta estimator in
-        the '.clf' dictionary, then attempt to replace it with a new
+        the 'self.clf' dictionary, then attempt to replace it with a new
         version. If update fails, we fall back to the old version again, 
         and throw a warning.
         
-        - Note: if verbose > 0 we print the meta estimator's init signature
+        - Note: if self.verbose > 0 we print the meta estimator's init signature
           if for some reason the update procedure fails.
           
         Parameters:
         ------------
             name : str
                 Name of an initialized meta estimator.
-                Must match an entry in '.names' property.
+                Must match an entry in 'self.names' property.
             
             params : dict
-                A dictionary containing parameters to be
-                updated. 
-                - To see available parameters check each meta estimators
-                  __init__() signature.
+                A dictionary containing parameters to beupdated. 
+                To see available parameters check each meta estimator's
+                __init__ signature.
                   
         Returns:
         ---------
-        Nothing: the '.clf' dictionary is instead edited inplace.
+        Nothing. The 'self.clf' dictionary is edited inplace.
         
         """
         if not len(params)>0:
