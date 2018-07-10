@@ -3,7 +3,7 @@ This module provides an overview and collects all implemented base classifiers
 (mostly from scikit-learn). But this module will eventually contain classifiers 
 from several possible sources.
 
-The `core` module uses the below function when importing algorithms into its 
+The core module uses the below function when importing algorithms into its 
 library.
 
 To add a new algorithm simply add a new line describing the file and the class
@@ -11,24 +11,31 @@ of the new classifier: ('file_name', 'name_of_meta_class')
 
 """
 
-def implemented():
+
+def implemented(add_network=True, add_xgboost=True):
     """ 
-    Hard coded list of algorithms 
-    """
+    Hard coded list of algorithms. Certain algorithms (such as e.g. keras) 
+    are only sent in if flag allows it. 
     
-    algorithms_ = [
-    
+    """    
+    algorithms = [    
+        # Scikit-learn algorithms
         ('adaboost', 'MetaAdaBoostClassifier'), 
-        ('nearest_neighbors', 'MetaKNearestNeighborClassifier'), 
         ('logistic_regression', 'MetaLogisticRegressionClassifier'),
-        ('sgdescent', 'MetaSGDClassifier'),
-        ('naive_bayes', 'MetaGaussianNBayesClassifier'),
-        ('naive_bayes', 'MetaMultinomialNBayesClassifier'),
+        ('nearest_neighbors', 'MetaKNearestNeighborClassifier'), 
         ('naive_bayes', 'MetaBernoulliNBayesClassifier'),
-        ('neural_network', 'MetaNeuralNetworkClassifier'),
+        ('naive_bayes', 'MetaGaussianNBayesClassifier'),
+        ('naive_bayes', 'MetaMultinomialNBayesClassifier'),        
         ('random_forest', 'MetaRandomForestClassifier'),
+        ('sgdescent', 'MetaSGDClassifier'),
         ('svm', 'MetaSVMClassifier'),
-        ('tree', 'MetaDecisionTreeClassifier'),
-        ('xgb', 'MetaXGBoostClassifier'),
-    ]    
-    return algorithms_
+        ('tree', 'MetaDecisionTreeClassifier')]
+    
+    # Keras
+    if add_network:
+        algorithms.append(('neural_network', 'MetaNeuralNetworkClassifier'))
+    # Xgboost
+    if add_xgboost:
+        algorithms.append(('xgb', 'MetaXGBoostClassifier'))        
+    return algorithms
+
