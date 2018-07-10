@@ -28,56 +28,56 @@ from keras.layers import (
 
 
 class MetaNeuralNetworkClassifier(BaseClassifier):
+    """
     
+    Parameters:
+    ------------
+
+        epochs : integer, default: 50
+            The number of epochs to train for.
+
+        batch_size : integer, default: 16
+            Batch size used in the fit method.
+
+        optimizer : string or keras callable. Default: str, 'adam'
+            The optimizer to use when compiling. Note that 'learning_rate'
+            overrides any learning rate that was set in the callable, so
+            make sure the values match.
+
+        learning_rate : float, default: 1e-3
+            Specify learning rate to use in the optimizer. 
+
+        n_hidden : integer, default: 2
+            Specify the number of hidden dense layers.
+
+        p : float, default: 0.1
+            Specify dropout rate if applicable. 
+            Only takes effect when 'dropout' is set to True or the dropout list contains
+            at least one item which is set to True (see below).
+
+        dropout : Boolean or list of booleans. Default: True.
+            If providing a list: it must be of length n_hidden+1
+            This parameter specifies the dropout per layer with rate given by 'p' (constant).
+
+        batch_norm : Boolean or list of booleans. Default: False
+            If providing a list: it must be of length n_hidden+1
+            Here you can choose how to apply batch normalization to the architecture.       
+
+        decay_units : boolean, default: False
+            If False then keep the number of units constant at the value given by 'input_units'.
+            If True then decay the number of units by a factor of 2 from layer to layer.
+
+        input_units : integer, default: 250
+            The number of units (neurons) to use in the input layer.
+
+        chkpnt_dir : str, default: ''
+            The directory to save model checkpoints (only weights are saved).
+
+    """
     def __init__(self, epochs=50, batch_size=32, optimizer='adam', learning_rate=1e-3, 
                  n_hidden=2, p=0.1, dropout=True, batch_norm=False, decay_units=False, 
                  input_units=250, chkpnt_dir=''):
     
-        """
-        Parameters:
-        ------------
-        
-            epochs : integer, default: 50
-                The number of epochs to train for.
-                
-            batch_size : integer, default: 16
-                Batch size used in the fit method.
-                
-            optimizer : string or keras callable. Default: str, 'adam'
-                The optimizer to use when compiling. Note that 'learning_rate'
-                overrides any learning rate that was set in the callable, so
-                make sure the values match.
-                
-            learning_rate : float, default: 1e-3
-                Specify learning rate to use in the optimizer. 
-                
-            n_hidden : integer, default: 2
-                Specify the number of hidden dense layers.
-                
-            p : float, default: 0.1
-                Specify dropout rate if applicable. 
-                Only takes effect when 'dropout' is set to True or the dropout list contains
-                at least one item which is set to True (see below).
-            
-            dropout : Boolean or list of booleans. Default: True.
-                If providing a list: it must be of length n_hidden+1
-                This parameter specifies the dropout per layer with rate given by 'p' (constant).
-                
-            batch_norm : Boolean or list of booleans. Default: False
-                If providing a list: it must be of length n_hidden+1
-                Here you can choose how to apply batch normalization to the architecture.       
-            
-            decay_units : boolean, default: False
-                If False then keep the number of units constant at the value given by 'input_units'.
-                If True then decay the number of units by a factor of 2 from layer to layer.
-                
-            input_units : integer, default: 250
-                The number of units (neurons) to use in the input layer.
-                
-            chkpnt_dir : str, default: ''
-                The directory to save model checkpoints (only weights are saved).
-                
-        """
         self.name = 'neuralnet'
         
         self.chkpnt_dir = chkpnt_dir
@@ -136,17 +136,14 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
             'predict_probas': True, 
             'standard_ensemble': False, 
         }
-    
-    
+        
     def set_param(self, param, value):
         super().set_param(param, value)
-        
-            
+                    
     def _set_architecture(self, input_shape, output_shape):
-        """
-        Called prior to building and compiling the keras model.
-        """
-        # Handle different representations
+        """Called prior to building and compiling the keras model. """
+        
+        # Handle miscellaneous representations
         if isinstance(input_shape, collections.Iterable):
             self.input_shape = input_shape
         else:
@@ -157,8 +154,7 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
         self.ready = True
         
         return
-        
-    
+           
     def _get_clf(self):
 
         """ 
@@ -194,8 +190,7 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
         K.set_value(model.optimizer.lr, self.network['lr'])
         
         return model
-    
-    
+        
     def check_training(X, y, train_size=0.1):
         """ 
         Perform training on p% (p<<100) of the training data to check that 
@@ -214,8 +209,7 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
         # Output a warning 
         warnings.warn("Time spent training on %s%% of data: %.2f (min)" 
                                     % (100*train_size, total_time/60.))
-        
-        
+                
     def _callbacks(self):
         """ Implement callbacks """
                 
@@ -275,8 +269,7 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
         self.ready = False
         
         return (xlr, ylr)
-    
-    
+        
     def fit(self, X, y, verbose=0, **kwargs):
         
         # We keep a local copy of the labels 

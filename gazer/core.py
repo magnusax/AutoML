@@ -1,109 +1,136 @@
-import numpy as np
-import warnings
-import time
 import sys
+import time
+import inspect
+import warnings
 
-from importlib import import_module  
 from operator import itemgetter
+from importlib import import_module  
+import numpy as np
 
 from skopt import gp_minimize
 from sklearn.preprocessing import LabelBinarizer
-from sklearn.model_selection import cross_val_score, RandomizedSearchCV
+from sklearn.model_selection import (cross_val_score, 
+                                     RandomizedSearchCV)
 
-try:
-    from keras.utils import to_categorical
-except ImportError:
-    warnings.warn("Cannot import keras")
-    
 from .base import EnsembleBaseClassifier, BaseClassifier
 from .algorithms import implemented        
 from .utils import skopt_space_mapping
 from .metrics import get_scorer
 
+if not __package__:
+    __package__ = __name__
 
+    
+def __checklib__(lib, alias):
+    try:
+        exec("import {}".format(lib))
+        return True
+    except:
+        warnings.warn("""{} import failed; '{}' 
+        will be unavailable.""".format(lib, alias), RuntimeWarning)
+        return False
+    
+__importflags__ = [__checklib__(lib, alias) for lib, alias in 
+                  [('keras', 'neuralnet'), ('xgboost', 'xgboost')]]
+
+if __importflags__[0]: 
+    import keras
+    
+if __importflags__[1]:
+    import xgboost
+    
+    
 class GazerMetaLearner():
-    """
-    Class that keeps track of available classifiers 
-    and implements functionality around them    
+    """    
     
-    ::: Importing :::
-    from gazer.core import GazerMetaLearner
+    Meta class that keeps track of available classifiers 
+    and implements functionality around them.    
+    
+    
+    Importing:
+    -----------
+    from gazer import GazerMetaLearner
     learner = GazerMetaLearner()     
-    
-    
-    Input:
-    --------
+      
+      
+    Parameters:
+    ------------
     
         method : str,  default, 'random'
-            random; choose num_sample random classifiers
+            random; choose 'n_samples' random classifiers
             all;  choose all available classifiers,
-            selected; send in an iterable of classifier names (arg: `estimators`)
+            select; send in an iterable of classifier names (arg: 'estimators')
                       
-        num_sample : integer, default: 3
-            choose number of classifiers to sample. Used when method='random'
+        n_samples : integer, default: 3
+            Choose number of classifiers to sample. Used when method='random' else ignored.
        
         estimators : None or list-like, default: None
-            Send a list of classifiers to initialize. Used when method='selected'
+            Send a list of classifiers to initialize. Used when method='selected' else ignored.
 
         base_estimator: None or sklearn estimator, default: None 
-            Decide which classifier to use as a weak learner when using ensembles
+            Decide which classifier to use as a weak learner in ensemble estimators.
        
         verbose : integer, default: 0 
-            If verbose>0 then output feedback messages       
+            If verbose>0 then output feedback messages.       
     
     Returns:
     ---------
 
-        GazerMetaLearner : class instance 
-            See GazerMetaLearner().clf for a dictionary of initialized learning algorithms  
-            consisting of algorithm-name keys with MetaClassifier objects as values
+    GazerMetaLearner : class instance 
+    See GazerMetaLearner(...).clf for a dictionary of initialized learning algorithms  
+    consisting of algorithm-name keys with MetaClassifier objects as values.
     
     """
     def __init__(self, 
                  method='random', 
-                 num_sample=3, 
+                 n_samples=3, 
                  estimators=None, 
                  base_estimator=None, 
                  exclude=None, 
                  verbose=0, 
                  random_state=None):                    
         
-        options = ('random', 'all', 'selected')
+        options = ('random', 'all', 'select')
         
+        options_string = ", ".join(options)        
         if method not in options:
-            raise ValueError("`method` should be one of (%s)" % ",".join(options))                 
+            raise ValueError("Allowed `method` values: {}".format(options_string))                 
+        self.method = method
         
         self.verbose = verbose   
-        self.method = method
-        self.num_sample = num_sample
+        
+        self.n_samples = n_samples if method=='random' else None
 
         # For reproducibility
-        if random_state is not None:
-            self.random_state = np.random.RandomState(random_state)    
-        else:
-            self.random_state = None
-        
+        self.random_state = (np.random.RandomState(random_state) 
+                             if random_state is not None else None)   
+
         # This estimator is used as 'base_estimator' in ensembling algorithms
         # It will override defaults in the individual init scripts
         self.base_estimator = base_estimator
+
+        # Algorithms to exclude (to avoid sampling them if asking for random set) 
+        self.exclude = [] if exclude is None else exclude
         
-        if method=='selected' and (estimators is None or len(estimators)==0):
-            raise Exception(
-                "Specify name of at least one algorithm in `estimators`."\
-                " Valid options are:\n%s" % ", ".join(self._build_classifier_dict().keys()))
-                
-        if exclude is None:
-            self.exclude = []
-        else:
-            self.exclude = exclude
+        # Estimators (used when method == 'select')
+        self.estimators = [] if estimators is None else list(estimators)
         
-        if method=='selected':
-            self.clf = {n:c for n,c in self._build_classifier_repository() if n in estimators}
-        else: 
-            self.clf = self._build_classifier_dict()    
-        self.clf = {n:c for n,c in self.clf.items() if not (n in self.exclude)}               
+        # For internal use only
+        self._mapper = {}
+
+        # Build repository of classifiers
+        try:
+            self.clf = self._build_repository() 
+        except Exception:
+            # If we are here then we need advice on available algorithms:
+            setattr(self, 'method', 'all'); setattr(self, 'exclude', [])
+            self.clf = self._build_repository()
+            raise ValueError("""Specify at least 1 algorithm in 'estimators'. 
+                \nRecommended: {}""".format(", ".join(self.names)))
         
-        if self.verbose>0: print("Initialized: %s" % ", ".join(self.names))         
+        if self.verbose > 0: 
+            print("Available algorithms (use '.clf' attribute for access):\n{}"
+                  .format(", ".join(self.names)))         
     
     @property
     def names(self):
@@ -112,59 +139,129 @@ class GazerMetaLearner():
     @property
     def num_estimators(self):
         return len(self.names)
-
-    def _build_classifier_dict(self):
-        # Build repo
-        clfs = self._build_classifier_repository()        
-        
-        # Do we need to downsample?
-        if self.method=='random':
-            if self.verbose>0: print("Sampling %i algorithms" % self.num_sample)
-            clfs = [clfs[i] for i in np.random.choice(len(clfs), self.num_sample, replace=False)]        
-        return {n:c for n,c in clfs}
     
-    def _build_classifier_repository(self):
-        # Read implemented algorithms (algorithms.py)
-        to_add = implemented()
+    
+    def update(self, name, params):
+        """ 
         
-        # Iteratively loop and check status, then add
-        algorithms = []       
-        for m, c in to_add:
-            name, algo = self._add_algorithm(m, c)
-            if name is not None and algo is not None:
-                algorithms.append((name, algo))  
-        return algorithms
+        Update any meta estimator's parameters. For now,
+        we first delete the old version of the meta estimator in
+        the '.clf' dictionary, then attempt to replace it with a new
+        version. If update fails, we fall back to the old version again, 
+        and throw a warning.
+        
+        - Note: if verbose > 0 we print the meta estimator's init signature
+          if for some reason the update procedure fails.
+          
+        Parameters:
+        ------------
+            name : str
+                Name of an initialized meta estimator.
+                Must match an entry in '.names' property.
+            
+            params : dict
+                A dictionary containing parameters to be
+                updated. 
+                - To see available parameters check each meta estimators
+                  __init__() signature.
+                  
+        Returns:
+        ---------
+        Nothing: the '.clf' dictionary is instead edited inplace.
+        
+        """
+        if not len(params)>0:
+            raise ValueError("'params' cannot be empty.")
+            
+        if not name in self.names:
+            raise ValueError("'name' not a valid name: see 'self.names'.")
+                             
+        mod_name, meta_estimator = self._mapper[name].split("__")
+        
+        # Find correct module
+        module = import_module(
+            ".".join((__package__, "classifiers", mod_name)), 
+            package=True)
+        new = getattr(module, meta_estimator)        
+        
+        # If we fail to update; keep old version
+        old = self.clf.pop(name)
+        try:
+            self.clf[name] = new(**params)
+        except:
+            _, desc, _ = sys.exc_info()
+            warnings.warn("Failed to update {}. Msg: {}"
+                          .format(name, desc))
+            if self.verbose > 0:
+                signature = inspect.getfullargspec(old.__init__)
+                print("{0:18}  {1}".format("Variable:", 'Default value:'))
+                for arg, default in zip(signature.args[1:], 
+                                        signature.defaults):
+                    print("{0:18}  {1}".format("<{}>".format(arg), default))
+            self.clf[name] = old
+        return
+        
+        
+    def _build_repository(self):
+                
+        # Read implemented algorithms
+        global __importflags__
+        to_add = implemented(*__importflags__)
+        
+        # Build from available
+        repo = []        
+        for module, cls in to_add:
+            instance = self._add_algorithm(module, cls)            
+            if (instance is not None) and (instance.name not in self.exclude):
+                repo.append((instance.name, instance))  
+                self._mapper[instance.name] = "__".join((module, cls))
+                
+        # All
+        if self.method=='all':
+            return {name:clf for name, clf in repo}
+        
+        
+        # Random
+        if self.method=='random':
+            num = min(len(repo), self.n_samples)
+            if self.verbose>0: 
+                print("Sampling {} algorithms".format(num))
+            repo = [repo[i] for i in np.random.choice(len(repo), num, replace=False)]           
+            return {name:clf for name, clf in repo}
+        
+        
+        # Select 
+        if self.method=='select':
+            if len(self.estimators)>0:
+                return {name:clf for name, clf in repo if name in self.estimators}
+            elif self.estimators is None or (len(self.estimators)==0):
+                raise Exception()
 
+                
     def _add_algorithm(self, module_name, algorithm_name):                     
         """ Import classifier algorithms """
-        
-        if not __package__:
-            __package__ == __name__        
-        module_path = ".".join((__package__, "classifiers", module_name))        
+                    
+        path_to_module = ".".join((__package__, "classifiers", module_name))                
         try:           
-            module = import_module(module_path, package=True)
-        except:
+            module = import_module(path_to_module, package=True)
+        except:            
             try:
-                module = import_module(module_path, package=False)
+                module = import_module(path_to_module, package=False)
             except ImportError: 
-                warnings.warn("Could not import module %s: \n%s" 
-                              % (module_name, sys.exc_info()[1]))
-                return (None, None)
+                warnings.warn("Could not import {}".format(module_name), RuntimeWarning)
+                return None
         
         algorithm = getattr(module, algorithm_name)        
         
         if issubclass(algorithm, EnsembleBaseClassifier):
-            instance = algorithm(
-                base_estimator=self.base_estimator, 
-                random_state=self.random_state)            
-        
-        elif issubclass(algorithm, BaseClassifier):
+            instance = algorithm(random_state = self.random_state,
+                                 base_estimator = self.base_estimator)                    
+        elif issubclass(algorithm, BaseClassifier):            
             if hasattr(algorithm(), 'random_state'):
-                instance = algorithm(random_state=self.random_state)
+                instance = algorithm(random_state = self.random_state)
             else:
-                instance = algorithm()
-                
-        return instance.name, instance
+                instance = algorithm()                
+        return instance
     
     
     def fit(self, X, y, n_jobs=1):
@@ -219,9 +316,11 @@ class GazerMetaLearner():
     
     def _get_algorithm(self, name):
         if not name in self.names:
-            raise ValueError("%s not found." % name)
-        return self.clf.get(name, None)
-
+            raise ValueError("{} not found.".format(name))
+        alg = self.clf.get(name, None)
+        assert alg is not None
+        return alg
+    
 
     def predict(self, X):
         return [(name, clf.estimator.predict(X)) for name, clf in self.clf.items()]
@@ -238,29 +337,33 @@ class GazerMetaLearner():
 
     def evaluate(self, X, y, metric='accuracy', get_loss=True, **kwargs):
         """
-        Evalute predictions (preds) against ground truth (y_true) 
-        using scikit-learn metrics
+        Evalute predictions computed from X against ground truth given by y 
+        using native scikit-learn metrics.
  
-        Input:
-        -------
+        Parameters:
+        ------------
+            X : matrix-like, 2D-array      
+                A matrix-like object of shape (n_samples, n_features)
+                - The data we wish to predict and evaluate score on
 
-        X :       
-            a matrix-like object of shape (n_samples, n_features)
-            - The data we wish to predict on
+            y : array-like, list-like, iterable     
+                An array (iterable) of ground truth labels. 
+                Shape: (n_samples,)
 
-        y :      
-            an array (iterable) of ground truth labels. Shape: (n_samples,)
+            metric : str, default: 'accuracy'   
+                Label that indicates type of metric to use 
+                (accuracy, auc, f1, recall, precision, log_loss). 
 
-        metric :      
-            a label (str) that indicates type of metric to use 
-            (accuracy, auc, f1, recall, precision, log_loss). 
-            Must be set.
+            get_loss : boolean, default: True
+                Compute the log loss score whenever possible.
         
-        Output:
-        --------
-
-            A list of 3-tuples (one for each algorithm) in the following form: 
-            (classifier: name, classifier: metric performance, classifier: log loss)
+        
+        Returns:
+        ---------
+        A list of 3-tuples (one for each algorithm) in the following form: 
+        (name, metric score, log loss). If get_loss = False, then 'log loss' 
+        will be set to "N/A".
+        
         """
         y_preds = self.predict(X)
         
@@ -280,30 +383,38 @@ class GazerMetaLearner():
             
             # Use keras api for convenience
             if name == 'neuralnet':
-                y_ = to_categorical(y.reshape(-1, 1))
+                y_ = keras.utils.to_categorical(y.reshape(-1, 1))
                 loss, score = self.clf[name].estimator.evaluate(X, y_)
-                scores[name] = {"score": np.round(score, decimals=4), 'loss': np.round(loss, decimals=4)}
+                scores[name] = {"score": np.round(score, decimals=4), 
+                                'loss': np.round(loss, decimals=4)}
                 del y_
                 continue
                 
-            score = scorer(y, y_pred)            
-            loss = np.nan
-            probabilities = self.clf[name].get_info()['predict_probas']
+            score = scorer(y, y_pred)                        
+            implements_proba = self.clf[name].get_info()['predict_probas']            
             
-            if get_loss and probabilities:
+            if get_loss and implements_proba:
                 try:
                     y_proba = [x for nme, x in probas if nme==name][0]
                     loss = log_loss(y, y_proba)  
+                    scores[name] = {"score": np.round(score, decimals=4), 
+                                    'loss': np.round(loss, decimals=4)}
                 except:
-                    warnings.warn("Could not compute log-loss for {}".format(name), RuntimeWarning)                               
-            scores[name] = {"score": np.round(score, decimals=4), 'loss': np.round(loss, decimals=4)}                        
+                    scores[name] = {"score": np.round(score, decimals=4), 'loss': np.nan}
+                    warnings.warn("Could not compute log-loss for {}".format(name), RuntimeWarning)
+            else:                                
+                scores[name] = {"score": np.round(score, decimals=4), 'loss': 'N/A'}                        
         
         if self.verbose>0:
-            for name, dscore in scores.items():
-                loss = dscore['loss']
-                score = dscore['score']
-                print("%s performance:\n\t Log-loss: %.4f \n\t Score: %.4f" 
-                      % (name, loss, score))
+            for name, score in scores.items():
+                _score = score['score']
+                _loss = score['loss']
+                if isinstance(_loss, str):
+                    print("%s performance:\n\t Log-loss: %s \n\t Score: %.4f" 
+                      % (name, _loss, _score))
+                else:
+                    print("%s performance:\n\t Log-loss: %.4f \n\t Score: %.4f" 
+                      % (name, _loss, _score))
         
         return scores
     
