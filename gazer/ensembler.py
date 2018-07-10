@@ -22,23 +22,23 @@ from .library import library_config
 
 
 class GazerMetaEnsembler(object):
+    """
+    Ensembler class.
+
+    Parameters:
+    ------------
+        learner : instance of GazerMetaLearner class
+            Used to infer which algorithms to include in the 
+            ensembling procedure
+
+        data_shape : tuple, length 2
+            Should specify input data dimensions according to
+            (X.shape[0], X.shape[1]) where `X` is the canonical data-matrix
+            with shape (n_samples, n_features)
     
-    
+    """
     def __init__(self, learner, data_shape):
-        """Ensembler class
 
-        Parameters:
-        ------------
-            learner : instance of GazerMetaLearner class
-                Used to infer which algorithms to include in the 
-                ensembling procedure
-
-            data_shape : tuple og length 2
-                Should specify input data dimensions according to
-                (X.shape[0], X.shape[1]) where `X` is the canonical data-matrix
-                with shape (n_samples, n_features)
-
-        """          
         if not isinstance(data_shape, tuple) and len(data_shape)==2:
             raise TypeError("data_shape must be a 2-tuple.")
         self.data_shape = data_shape
@@ -56,17 +56,17 @@ class GazerMetaEnsembler(object):
 
         
     def summary(self):
-        """Summarize number of fits per algorithm to expect."""
+        """ Summarize expected number of fits (individual and total). """
         total = 0
         for k, v in self.ensemble.items():
             total += len(v)
-            print("Algorithm: {} \tFits: {}".format(k, len(v)), end="\n")
-        print("\nTotal number of fits = {}".format(total))
+            print("Algorithm: {} \tFits: {}".format(k, len(v)))
+        print("Expected total number of fits = {}".format(total))
  
 
     def _build(self):
-        """Build ensemble from base learners contained
-        in the `learner` object.
+        """
+        Build ensemble from base learners contained in the `learner` object.
 
         Parameters:
         -----------
@@ -80,9 +80,9 @@ class GazerMetaEnsembler(object):
 
         Returns:
         ---------
-        Dictionary : (algorithm[str]: classifiers[list]) 
-        Dictionary containing name keys with corresponding values being
-        a list of possible learners with varying settings of hyperparameters.
+            Dictionary : (algorithm[str]: classifiers[list]) 
+            Dictionary containing name keys with corresponding values being
+            a list of possible learners with varying settings of hyperparameters.
         
         """
         lib = library_config(self.learner.names, *self.data_shape)        
@@ -231,14 +231,16 @@ class GazerMetaEnsembler(object):
         names = list(self.ensemble.keys())
         
         if 'neuralnet' in names:
-            history['neuralnet'] = self.add_networks(
-                self.ensemble.pop('neuralnet'), X, y, os.path.join(save_dir, 'neuralnet'))         
-        
+            clf = self.ensemble.pop('neuralnet')
+            path = os.path.join(save_dir, 'neuralnet')
+            history['neuralnet'] = self._add_networks(clf, X, y, path)
+            del clf
+            
         for name, clfs in self.ensemble.items():
             
             path = os.path.join(save_dir, name)
             os.makedirs(path)        
-            ekwargs = kwargs.get(name, {})
+            kwargs_ = kwargs.get(name, {})
            
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
@@ -248,7 +250,7 @@ class GazerMetaEnsembler(object):
                     modelname = "{}_{:04d}train.pkl".format(name,(idx+1))
                     modelfile = os.path.join(path, modelname)
                     try:
-                        estimator.set_params(**ekwargs).fit(X, y)
+                        estimator.set_params(**kwargs_).fit(X, y)
                     except:
                         _, desc, _ = sys.exc_info()
                         raise NotFittedError("Could not fit: {}".format(desc))
@@ -263,11 +265,16 @@ class GazerMetaEnsembler(object):
         
         return history
     
-    def _add_networks(self, clf, X, Y, path):
+    def _add_networks(self, clf, X, y, path):
         """Add to ensemble repository a set of keras neural network
         models
         
         """
+        from keras.utils import to_categorical
+        y_ = y.copy()
+        y_ = to_categorical(y_.reshape(-1,1))
+        
+        
         # Prepare for ensembling
         os.makedirs(path)
         clf.set_param('chkpnt_dir', path) 
@@ -280,38 +287,49 @@ class GazerMetaEnsembler(object):
         print("Training neural net..")
                 
         start = time.time()
-        clf.fit(X, y, verbose=1)
+        clf.fit(X, y, verbose=0)
                 
         print("Train time: {:.2f} min".format((time.time()-start)/60.))
                 
         # Evaluate and save 
-        patterns = ('*.hdf5', '*.h5')
+        patterns = ('*.hdf5', '*.h5', '*.h5py')
         weightfiles = []
         for pattern in patterns:
             weightfiles += glob.glob(os.path.join(path, pattern))
         
         model = clf.estimator
         models = []
-        
-        for weightfile in tqdm(
-            weightfiles, desc="{}".format(name), ncols=120): 
+               
+        for weightfile in tqdm(weightfiles, desc="neuralnet", ncols=120): 
             model.load_weights(weightfile)
-            loss, score = model.evaluate(X, y)
-            models.append(
-                (weightfile, np.round(loss, decimals=4)))
-            
+            loss, score = model.evaluate(X, y_, verbose=0)
+            models.append((weightfile, np.round(loss, decimals=4)))
+        del y_
+        
         # We sort according to loss: lower is better
-        return sorted(models, key=lambda x: x[1])
+        return (model, sorted(models, key=lambda x: x[1]))
    
     
     def _unwrap(self):
-        """Convenience method. Take object containing fitted algorithms 
-        and scores and return a sorted list of classifiers:       
         """
-        ranked = []
-        for _, v in self.orchestrator.items():
-            ranked.append(v)
-        return sorted([x for sublist in ranked for x in sublist], key=lambda x: -x[1])   
+        Convenience method. Take object containing fitted algorithms 
+        and scores and return a sorted list of classifiers.    
+        
+        """
+        if 'neuralnet' in self.learner.names:
+            model, files = self.orchestrator.pop('neuralnet')
+            files = [('neuralnet', path) for path, _ in files]
+        else: 
+            model = None
+            files = []
+        
+        # Organise and order    
+        ordered = []
+        for name, fs in self.orchestrator.items():
+            fs = [(name, path) for path, _ in fs]
+            ordered += fs
+        ordered += files        
+        return {'model': model, 'files': ordered} 
     
     
     def hillclimb(self, X_val, y_val, n_best=0.1, p=0.3, iterations=10, scoring='accuracy'):
@@ -338,7 +356,8 @@ class GazerMetaEnsembler(object):
                 The metric to use when hillclimbing
                 
         """
-        clfs = self._unwrap()
+        organised = self._unwrap()
+        model, clfs = organised['model'], organised['files']
     
         total = len([c for c,_ in clfs])
 
@@ -354,17 +373,24 @@ class GazerMetaEnsembler(object):
         # Cache predictions
         pool = []
         val_scores_check = []
-        for path, _ in clfs:        
-            clf = joblib.load(path)
-            y_pred = clf.predict(X_val)
+        for name, path in clfs:
+            if name == 'neuralnet':
+                clf = model.load_weights(path)
+                y_pred = clf.predict(X_val) # shape: (n_samples, n_classes)
+                y_pred = np.array(
+                    [list(l).index(max(list(l))) 
+                     for l in model.predict(X_val)]) # shape: (n_samples,)
+            else:
+                clf = joblib.load(path)
+                y_pred = clf.predict(X_val)                
             val_score = scorer(y_pred, y_val)            
             pool.append((clf, y_pred, val_score))
             val_scores_check.append(val_score)
         
         del clfs
         
-        print("Max validation score = ", max(val_scores_check))
-        ####return val_scores_check
+        print("Max validation score = {}".format(
+            np.round(max(val_scores_check), decimals=4)))
         
         # Sort by score on validation set. Add index.
         pool = [(str(idx), clf, y_pred) for idx, (clf, y_pred, _) 
@@ -383,7 +409,7 @@ class GazerMetaEnsembler(object):
         
         # Choose a subset of algorithms to use in bootstrap 
         algs = random.choices(pool, k=int(p*len(pool)))
-        
+                
         impatience = 0
         validation_scores = []
         for it in range(1, iterations+1):
@@ -434,9 +460,16 @@ class GazerMetaEnsembler(object):
             # Try 10 times to improve    
             if impatience == 10:
                 break
-            
+        
+        weighted_ensemble = [(clf, weights[id]) for id, clf, _ in ensemble]
+        # Sanity check:
+        for clf, wt in weighted_ensemble:
+            if wt == 0: 
+                raise ValueError(
+                    "Error: estimator {} has weight = 0.".format(repr(clf)))
+        
         # Return the ensemble
-        return validation_scores
+        return validation_scores, weighted_ensemble
         
         
     def score(self, ensemble, weights, y, scorer):
