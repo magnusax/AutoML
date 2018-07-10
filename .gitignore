@@ -1,5 +1,7 @@
 .ipynb_checkpoints/
-*.ipynb
+*.ipynb~
 *.py~
 src/notebooks/
 __pycache__
+dist/
+build/
