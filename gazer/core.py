@@ -13,7 +13,10 @@ from sklearn.model_selection import (cross_val_score,
                                      RandomizedSearchCV)
 
 from gazer import __importflags__
+if __importflags__[0]: import keras
+if __importflags__[1]: import xgboost
 
+    
 from .base import EnsembleBaseClassifier, BaseClassifier
 from .algorithms import implemented        
 from .utils import skopt_space_mapping
@@ -25,11 +28,9 @@ if not __package__:
 
     
 class GazerMetaLearner():
-    """    
-    
+    """        
     Meta class that keeps track of available classifiers 
-    and implements functionality around them.    
-    
+    and implements functionality around them.        
     
     Importing:
     -----------
@@ -59,10 +60,17 @@ class GazerMetaLearner():
     
     Returns:
     ---------
+    GazerMetaLearner : object class
+    
+        - See 'self.clf' for a dictionary of initialized learning algorithms.
 
-    GazerMetaLearner : class instance 
-    See GazerMetaLearner(...).clf for a dictionary of initialized learning algorithms  
-    consisting of algorithm-name keys with MetaClassifier objects as values.
+        - Each algorithm is a wrapper, or "meta estimator" that implements extra functionality
+          around scikit-learn like algorithms.
+
+        - Algorithms are accessible through self.clf[name] where name is of str type.
+
+        - Names are available in 'self.names' and you may consult this property whenever you need
+          a hint on how to inspect an algorithm (or change it).
     
     """
     def __init__(self, 
@@ -163,8 +171,8 @@ class GazerMetaLearner():
         
         # Find correct module
         module = import_module(
-            ".".join((__package__, "classifiers", mod_name)), 
-            package=True)
+            ".".join((__package__, "classifiers", mod_name)), package=True)
+        
         new = getattr(module, meta_estimator)        
         
         # If we fail to update; keep old version

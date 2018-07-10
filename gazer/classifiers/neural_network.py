@@ -134,12 +134,12 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
             'does_multiclass': True,
             'does_regression': False, 
             'predict_probas': True, 
-            'standard_ensemble': False, 
-        }
+            'standard_ensemble': False }
         
     def set_param(self, param, value):
         super().set_param(param, value)
-                    
+               
+            
     def _set_architecture(self, input_shape, output_shape):
         """Called prior to building and compiling the keras model. """
         
@@ -190,6 +190,7 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
         K.set_value(model.optimizer.lr, self.network['lr'])
         
         return model
+        
         
     def check_training(X, y, train_size=0.1):
         """ 
@@ -269,6 +270,7 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
         self.ready = False
         
         return (xlr, ylr)
+        
         
     def fit(self, X, y, verbose=0, **kwargs):
         

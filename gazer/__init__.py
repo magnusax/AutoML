@@ -1,13 +1,9 @@
 import warnings
 
-from .core import GazerMetaLearner
-from .ensembler import GazerMetaEnsembler
-
-
 # Set version and author/email by hand
 __version__ = '0.0.1'
 __author__ = "Magnus Axelsson"
-__email__ "johanmagnusaxelsson <at> gmail <dot> com"
+__email__ = "johanmagnusaxelsson <at> gmail <dot> com"
 
 
 # Find external packages
@@ -23,6 +19,9 @@ def __checklib__(lib, alias):
 __importflags__ = [
     __checklib__(lib, alias) for lib, alias 
     in [('keras', 'neuralnet'), ('xgboost', 'xgboost')]]
+
+from .core import GazerMetaLearner
+from .ensembler import GazerMetaEnsembler
 
 
 __all__ = [ "GazerMetaLearner", "GazerMetaEnsembler" ]
