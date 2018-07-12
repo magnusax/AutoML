@@ -219,29 +219,34 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
                 
     def _callbacks(self):
         """ Implement callbacks """
-                
+         
+        monitor = 'val_loss' if self.validation_split>0 else 'loss'
+        
         # Reduce learning rate on plateau
         reduce_lr = ReduceLROnPlateau(
-            monitor='val_loss', factor=0.5, patience=5, min_lr=1e-5)
+            monitor=monitor, 
+            factor=0.5, 
+            patience=5, 
+            min_lr=1e-5)
         
         # Early stopping
         early_stop = EarlyStopping(
-            monitor='val_loss', min_delta=0.0001, patience=20)
+            monitor=monitor, 
+            min_delta=0.0001, 
+            patience=20)
         
-        # Checkpointing        
-        checkpoint = ModelCheckpoint(
-            os.path.join(
-                self.chkpnt_dir,
-                'weights.{epoch:02d}_{loss:.2f}.hdf5'), 
-            monitor = 'val_loss', 
-            save_best_only = False, 
-            save_weights_only = True, 
-            period = self.chkpnt_per)           
+        # Checkpointing
+        wtfile = 'weights.{epoch:02d}_{loss:.2f}.hdf5'
+        checkpoint = ModelCheckpoint(os.path.join(self.chkpnt_dir, wtfile), 
+            monitor=monitor, 
+            save_best_only=False, 
+            save_weights_only=True, 
+            period=self.chkpnt_per)           
         
         if self.ensemble:
             return [reduce_lr, checkpoint,]
         else:
-            return [reduce_lr, early_stop]
+            return [reduce_lr, early_stop,]
     
     
     def lr_finder(self, X, y, monitor='acc', step_size=2000):

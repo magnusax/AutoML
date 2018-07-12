@@ -1,15 +1,14 @@
 """
 Credit:
 --------
-Methods iter_safe, and get_dicts are from:
+Methods iter_safe, get_dicts are from:
     https://codereview.stackexchange.com/questions/128088/
         convert-a-dictionary-of-iterables-into-an-iterator-of-dictionaries
 """
 
 import itertools
 import pandas as pd
-from tqdm import (tqdm, 
-                  tqdm_notebook)
+from tqdm import tqdm_notebook
 
 
 def iter_safe(value):
@@ -29,13 +28,13 @@ def get_dicts(d):
         yield dict(zip(keys, values))
         
         
-def grid_search(learner, params, data, name='neuralnet', in_notebook='True'):
+def grid_search(learner, params, data, name='neuralnet'):
     """
     Grid search method customized for use with the Neural Network
     meta estimator, but works for any meta estimator in this library.
     
-    - For native scikit-learn algorithms, it is recommended to use GridSearchCV
-    class instead. This method does e.g. not implement parallel fitting. 
+    - For native scikit-learn algorithms it is recommended to use GridSearchCV
+    class instead. This method does e.g. not implement distributed fitting. 
         
     Parameters:
     ------------
@@ -51,17 +50,16 @@ def grid_search(learner, params, data, name='neuralnet', in_notebook='True'):
             - A dictionary of parameters and corresponding values/iterables.
         
         data : dict
-            - A dictionary containing train and CV data in the following format:
+            - A dictionary containing train and validation data in the following format:
             data = {'train': (X_train, y_train), 'val': (X_val, y_val)}
-            
-        in_notebook, bool, default: True
-            - Are we calling from a notebook or not. Has impact on choice
-            of tqdm import.
             
     Returns:
     ---------
     Tuple of (best) parameter configuration, and pandas dataframe with complete
-    overview of parameters and their train+validation scores for easy comparison.
+    overview of parameters and their train + validation scores for easy comparison.
+    
+    - Note that the "best" configuration not necessarily corresponds to lowest 
+    generalization error.
     
     """    
     # Keep silent during search
@@ -74,17 +72,17 @@ def grid_search(learner, params, data, name='neuralnet', in_notebook='True'):
     X_val, y_val = data['val']    
        
         
-    # Internal convenience funcction
+    # Internal convenience function
     def train_eval(pars):
         learner.update(name, pars)
         learner.fit(X_train, y_train)
-        val = learner.evaluate(X_val, y_val)[name]
-        train = learner.evaluate(X_train, y_train)[name]
+        val = learner.evaluate(X_val, y_val, 
+                               get_loss=True)[name]
+        train = learner.evaluate(X_train, y_train, 
+                                 get_loss=True)[name]
         return {
-            'train_loss':  train['loss'], 
-            'train_score': train['score'],
-            'val_loss':  val['loss'],                
-            'val_score': val['score'] }
+            'train_loss': train['loss'], 'train_score': train['score'],
+            'val_loss': val['loss'], 'val_score': val['score']}
     
     params_scores = [] 
     number_of_fits = len(list(get_dicts(params)))    
@@ -97,8 +95,8 @@ def grid_search(learner, params, data, name='neuralnet', in_notebook='True'):
     
     df = (pd.DataFrame
           .from_dict(params_scores)
-          .sort_values(['val_score', 'val_loss'], ascending=[False, True])
-          .reset_index())  
+          .sort_values(['val_loss', 'val_score'], 
+                       ascending=[True, False]))  
     
     config = df.T.to_dict()[0]
     remove = ('val_loss', 'val_score', 
