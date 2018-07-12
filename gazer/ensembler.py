@@ -94,14 +94,14 @@ class GazerMetaEnsembler(object):
             standard_ensemble = meta_info.get('standard_ensemble', True)
             
             if not standard_ensemble:
-                clf = self.learner.clf[name] 
-                
                 if name == 'neuralnet':
-                    for k, v in grid.items():
-                        if isinstance(clf.network[k], dict):
-                            clf.network[k].update(v)
-                        else:
-                            clf.network[k] = v               
+                    self.learner.update(name, grid) # This updates the neural network according to 'grid'
+                    clf = self.learner.clf[name]                 
+                    #for k, v in grid.items():
+                    #    if isinstance(clf.network[k], dict):
+                    #        clf.network[k].update(v)
+                    #    else:
+                    #        clf.network[k] = v               
                 build[name] = clf
             else:
                 build[name] = self._gen_templates(name, grid)            
@@ -213,9 +213,10 @@ class GazerMetaEnsembler(object):
         # Get the scorer method
         scorer = get_scorer(scoring)
         
-        self.orchestrator = self._fit(X=X, y=y, 
-                                      save_dir=save_dir, 
-                                      scorer=scorer, 
+        self.orchestrator = self._fit(X = X, 
+                                      y = y, 
+                                      save_dir = save_dir, 
+                                      scorer = scorer, 
                                       **kwargs)
         return
     
@@ -223,17 +224,18 @@ class GazerMetaEnsembler(object):
     def _fit(self, X, y, save_dir, scorer, **kwargs):
         """ Implement the fitting """
         
-        # Keep track of model and scores in `models`
+        # Keep track of model and scores
         # All relevant data is available in `history`
         history = {}
                
-        # We want to train the network first, if present
         names = list(self.ensemble.keys())
-        
-        if 'neuralnet' in names:
-            clf = self.ensemble.pop('neuralnet')
-            path = os.path.join(save_dir, 'neuralnet')
-            history['neuralnet'] = self._add_networks(clf, X, y, path)
+
+        # We want to train the network first, if present
+        name = 'neuralnet'
+        if name in names:
+            path = os.path.join(save_dir, name)
+            clf = self.ensemble.pop(name)
+            history[name] = self._add_networks(clf, X, y, path)
             del clf
             
         for name, clfs in self.ensemble.items():
@@ -270,10 +272,7 @@ class GazerMetaEnsembler(object):
         models
         
         """
-        from keras.utils import to_categorical
-        y_ = y.copy()
-        y_ = to_categorical(y_.reshape(-1,1))
-        
+        y_ = clf.y_check(y, verbose=0)
         
         # Prepare for ensembling
         os.makedirs(path)
@@ -287,12 +286,14 @@ class GazerMetaEnsembler(object):
         print("Training neural net..")
                 
         start = time.time()
-        clf.fit(X, y, verbose=0)
+        clf.fit(X, y_, verbose=0)
                 
-        print("Train time: {:.2f} min".format((time.time()-start)/60.))
-                
+        print("Train time: {:.2f} min"
+              .format((time.time()-start)/60.))
+        time.sleep(1)
+        
         # Evaluate and save 
-        patterns = ('*.hdf5', '*.h5', '*.h5py')
+        patterns = ('*.hdf5','*.h5','*.h5py')
         weightfiles = []
         for pattern in patterns:
             weightfiles += glob.glob(os.path.join(path, pattern))
@@ -300,36 +301,36 @@ class GazerMetaEnsembler(object):
         model = clf.estimator
         models = []
                
-        for weightfile in tqdm(weightfiles, desc="neuralnet", ncols=120): 
+        for weightfile in tqdm(weightfiles, desc="Net (save wts)", ncols=120): 
             model.load_weights(weightfile)
             loss, score = model.evaluate(X, y_, verbose=0)
             models.append((weightfile, np.round(loss, decimals=4)))
-        del y_
+        del y_, model
         
         # We sort according to loss: lower is better
         return (clf, sorted(models, key=lambda x: x[1]))
    
     
-    def _unwrap(self):
+    def _prep_output(self):
         """
-        Convenience method. Take object containing fitted algorithms 
-        and scores and return a sorted list of classifiers.    
-        
+        Internal convenience method. Take object containing fitted algorithms 
+        and scores and return a sorted list of classifiers.            
         """
+        # External package
         if 'neuralnet' in self.learner.names:
-            model, files = self.orchestrator.pop('neuralnet')
-            files = [('neuralnet', path) for path, _ in files]
+            model, nn_fs = self.orchestrator.pop('neuralnet')
+            nn_fs = [('neuralnet', path) for path, _ in nn_fs]
         else: 
             model = None
-            files = []
+            nn_fs = []
         
-        # Organise and order    
-        ordered = []
+        # Collect and order natives    
+        files = []
         for name, fs in self.orchestrator.items():
             fs = [(name, path) for path, _ in fs]
-            ordered += fs
-        ordered += files        
-        return {'model': model, 'files': ordered} 
+            files += fs
+        files += nn_fs
+        return {'model': model, 'files': files} 
     
     
     def hillclimb(self, X_val, y_val, n_best=0.1, p=0.3, iterations=10, scoring='accuracy'):
@@ -356,8 +357,9 @@ class GazerMetaEnsembler(object):
                 The metric to use when hillclimbing
                 
         """
-        organised = self._unwrap()
-        model, clfs = organised['model'], organised['files']
+        mod_files = self._prep_output()
+        nn_model, clfs = (mod_files['model'], 
+                          mod_files['files'])
     
         total = len([c for c,_ in clfs])
 
@@ -374,12 +376,14 @@ class GazerMetaEnsembler(object):
         pool = []
         val_scores_check = []
         for name, path in clfs:
-            if name == 'neuralnet':
-                clf = model.estimator.load_weights(path)
-                y_pred = clf.predict(X_val)
+            
+            if name=='neuralnet':
+                nn_model.estimator.load_weights(path)
+                clf = nn_model
             else:
                 clf = joblib.load(path)
-                y_pred = clf.predict(X_val)                
+            
+            y_pred = clf.predict(X_val) 
             val_score = scorer(y_pred, y_val)            
             pool.append((clf, y_pred, val_score))
             val_scores_check.append(val_score)
@@ -397,16 +401,22 @@ class GazerMetaEnsembler(object):
         ensemble = pool[:grab]
         print("Algorithms in initial ensemble: {}".format(len(ensemble)))
         
-        weights = {idx: 0 for idx,_,_ in pool}    
+        weights = {idx: 0.0 for idx,_,_ in pool}    
         for t in ensemble:
-            weights[t[0]] = 1
+            weights[t[0]] = 1.0
 
         current_score = self.score(ensemble, weights, y_val, scorer)        
         print("Initial {}-score: {:.4f}".format(scoring, current_score))
         
         # Choose a subset of algorithms to use in bootstrap 
-        algs = random.choices(pool, k=int(p*len(pool)))
-                
+        idxs = [idx for idx,_,_ in pool]
+        idxs_mapper = {idx:(idx,clf,pr) for idx,clf,pr in pool}       
+        algs = [idxs_mapper[idx] for idx in 
+                np.random.choice(idxs, size=int(p*float(len(pool))), 
+                                 replace=False)]        
+        del idxs, idxs_mapper
+        
+        
         impatience = 0
         validation_scores = []
         for it in range(1, iterations+1):
@@ -434,8 +444,14 @@ class GazerMetaEnsembler(object):
                     best_idx = idx_
                     best_score = score_
                     best_alg = [alg]
-                        
-            if best_score >= current_score: 
+            
+            if best_score<=current_score:
+                impatience += 1
+            
+            elif best_score>current_score:
+                impatience = 0
+            
+            if best_score>=current_score: 
                 
                 # We only add a new algorithm if not previously in ensemble
                 # If it is contained in the ensemble, then increasing its
@@ -443,19 +459,14 @@ class GazerMetaEnsembler(object):
                 if not best_alg in ensemble:
                     ensemble += best_alg
 
-                weights[best_idx] += 1
+                weights[best_idx] += 1.0
                 current_score = best_score
                 
             print("Iteration: {} \tScore: {:.6f}".format(it, current_score))
             validation_scores.append((it, current_score))
-            
-            
-            if best_score <= current_score:
-                impatience += 1
-            elif best_score > current_score:
-                impatience = 0
-            # Try 10 times to improve    
-            if impatience == 10:
+ 
+            # Try 7 times to improve    
+            if impatience==7:
                 break
         
         weighted_ensemble = [(clf, weights[id]) for id, clf, _ in ensemble]

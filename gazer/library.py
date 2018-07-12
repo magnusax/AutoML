@@ -163,11 +163,11 @@ def keras_net_lib():
     if we shall be able to include it in the ensemble library
     
     """
-    # Used to set the 'network' dictionary
+    # Used to set various properties of the network
     network = {
-        'chkpnt_period': 1,
+        'chkpnt_per': 2,
         'epochs': 100,
-        'batch_size': 64,}    
+        'batch_size': 16,}    
     
     return network
     

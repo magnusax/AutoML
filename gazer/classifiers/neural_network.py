@@ -76,14 +76,15 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
     """
     def __init__(self, epochs=50, batch_size=32, optimizer='adam', learning_rate=1e-3, 
                  n_hidden=2, p=0.1, dropout=True, batch_norm=False, decay_units=False, 
-                 input_units=250, chkpnt_dir=''):
+                 input_units=250, chkpnt_dir='', chkpnt_per=1):
     
         self.name = 'neuralnet'
         
-        self.chkpnt_dir = chkpnt_dir
-        
         # Control callbacks (enable checkpointing, etc.)
         self.ensemble = False
+        self.chkpnt_dir = chkpnt_dir
+        self.chkpnt_per = chkpnt_per
+        
         
         # We need to know the shape of the data, and the number of classes
         # They are set prior to calling `fit` through a call to `set_architecture`
@@ -224,12 +225,13 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
         
         # Checkpointing        
         checkpoint = ModelCheckpoint(
-            os.path.join(self.chkpnt_dir, 
-                         'weights.{epoch:02d}_{loss:.2f}.hdf5'), 
-            monitor='val_loss', 
-            save_best_only=False, 
-            save_weights_only=True, 
-            period=self.network['chkpnt_period'])           
+            os.path.join(
+                self.chkpnt_dir,
+                'weights.{epoch:02d}_{loss:.2f}.hdf5'), 
+            monitor = 'val_loss', 
+            save_best_only = False, 
+            save_weights_only = True, 
+            period = self.chkpnt_per)           
         
         if self.ensemble:
             return [reduce_lr, checkpoint,]
@@ -272,21 +274,26 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
         return (xlr, ylr)
         
         
-    def fit(self, X, y, verbose=0, **kwargs):
-        
-        # We keep a local copy of the labels 
-        # to avoid modifying the original input data
+    def y_check(self, y, verbose=0):
+        from keras.utils import to_categorical
         y_ = y.copy()
-        
-        if len(y_.shape)==1: y_ = y_.reshape(-1, 1)
-        
-        if y_.shape[1]==1:
-            y_ = keras.utils.to_categorical(y_)
+        if len(y_.shape)==1: 
+            y_ = y_.reshape(-1,1)
             if verbose > 0:
                 warnings.warn(
-                    """Keras expects one-hot encoded label data: your data does not seem to fit this requirement.
-                       \nWill attempt to apply one-hot encoding before sending to `fit` method.""")
-                   
+                    """Keras expects one-hot encoded label data: 
+                       your data does not seem to fit this requirement.
+                       \nWill attempt to apply one-hot encoding before 
+                       sending to `fit` method.""")
+            return to_categorical(y.reshape(-1,1))
+        else:
+            return y_
+        
+        
+    def fit(self, X, y, verbose=0, **kwargs):
+        
+        y_ = self.y_check(y, verbose)
+                              
         # This will only happen once as `set_architecture` modifies
         # this variable. Successive calls to `fit` will not cause
         # a recompilation of the model (i.e. you don't need to start from scratch!)
@@ -310,14 +317,18 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
                 **kwargs)     
 
             
-    def predict(X):
+    def predict(self, X):
         """
         In some cases we need to override the canonical predict method
         normally used by keras api.
         
         """
         if self.estimator is not None:
-            y_pred = self.estimator.predict(X)
-            return np.array([list(l).index(max(list(l))) for l in y_pred])
+            y_pred = []
+            for pr in self.estimator.predict(X):
+                pr = list(pr)
+                cls = pr.index(max(pr))
+                y_pred.append(cls)
+            return np.array(y_pred)
         else:
             raise Exception("Call 'fit' first.")
