@@ -397,8 +397,8 @@ class GazerMetaEnsembler(object):
 
         # Set initial ensemble
         ensemble = pool[:grab]        
-        for t in ensemble:
-            weights[t[0]] = 1.0
+        for idx, *_ in ensemble:
+            weights[idx] = 1.0
 
         current_score = self.score(ensemble, weights, y_val, scorer)        
         print("Initial {}-score: {:.4f}".format(scoring, current_score))
