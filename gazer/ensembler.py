@@ -95,14 +95,9 @@ class GazerMetaEnsembler(object):
             
             if not standard_ensemble:
                 if name == 'neuralnet':
-                    self.learner.update(name, grid) # This updates the neural network according to 'grid'
-                    clf = self.learner.clf[name]                 
-                    #for k, v in grid.items():
-                    #    if isinstance(clf.network[k], dict):
-                    #        clf.network[k].update(v)
-                    #    else:
-                    #        clf.network[k] = v               
-                build[name] = clf
+                    # Update neural network parameters
+                    self.learner.update(name, grid)                            
+                build[name] = self.learner.clf[name]
             else:
                 build[name] = self._gen_templates(name, grid)            
         return build
@@ -396,20 +391,21 @@ class GazerMetaEnsembler(object):
         # Sort by score on validation set. Add index.
         pool = [(str(idx), clf, y_pred) for idx, (clf, y_pred, _) 
                 in enumerate(sorted(pool, key=lambda x: -x[2]))]    
-    
-        # Set initial ensemble
-        ensemble = pool[:grab]
-        print("Algorithms in initial ensemble: {}".format(len(ensemble)))
         
-        weights = {idx: 0.0 for idx,_,_ in pool}    
+        # Define weights
+        weights = {idx: 0.0 for idx, *_ in pool}    
+
+        # Set initial ensemble
+        ensemble = pool[:grab]        
         for t in ensemble:
             weights[t[0]] = 1.0
 
         current_score = self.score(ensemble, weights, y_val, scorer)        
         print("Initial {}-score: {:.4f}".format(scoring, current_score))
         
+        
         # Choose a subset of algorithms to use in bootstrap 
-        idxs = [idx for idx,_,_ in pool]
+        idxs = [idx for idx, *_ in pool]
         idxs_mapper = {idx:(idx,clf,pr) for idx,clf,pr in pool}       
         algs = [idxs_mapper[idx] for idx in 
                 np.random.choice(idxs, size=int(p*float(len(pool))), 
@@ -425,8 +421,7 @@ class GazerMetaEnsembler(object):
                 best_idx = None
                 best_score = -float(1e4)
 
-            for alg in algs:
-                
+            for alg in algs:                
                 idx_ = alg[0]
                 
                 # Copy ensemble and add algorithm
@@ -441,9 +436,7 @@ class GazerMetaEnsembler(object):
                 score_ = self.score(tst_ens, tst_wts, y_val, scorer)
 
                 if score_ > best_score:
-                    best_idx = idx_
-                    best_score = score_
-                    best_alg = [alg]
+                    best_idx, best_score, best_alg = (idx_, score_, [alg])
             
             if best_score<=current_score:
                 impatience += 1
