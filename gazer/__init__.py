@@ -20,6 +20,8 @@ __importflags__ = [
     __checklib__(lib, alias) for lib, alias 
     in [('keras', 'neuralnet'), ('xgboost', 'xgboost')]]
 
+
+# Once the flags are set, we can import package
 from .core import GazerMetaLearner
 from .ensembler import GazerMetaEnsembler
 

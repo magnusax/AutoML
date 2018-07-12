@@ -11,13 +11,13 @@ of the new classifier: ('file_name', 'name_of_meta_class')
 
 """
 
-
 def implemented(add_network=True, add_xgboost=True):
     """ 
     Hard coded list of algorithms. Certain algorithms (such as e.g. keras) 
     are only sent in if flag allows it. 
     
     """    
+
     algorithms = [    
         # Scikit-learn algorithms
         ('adaboost', 'MetaAdaBoostClassifier'), 
@@ -33,9 +33,13 @@ def implemented(add_network=True, add_xgboost=True):
     
     # Keras
     if add_network:
+        import keras
         algorithms.append(('neural_network', 'MetaNeuralNetworkClassifier'))
+    
     # Xgboost
     if add_xgboost:
+        import xgboost
         algorithms.append(('xgb', 'MetaXGBoostClassifier'))        
+    
     return algorithms
 

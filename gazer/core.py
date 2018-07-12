@@ -12,20 +12,21 @@ from sklearn.preprocessing import LabelBinarizer
 from sklearn.model_selection import (cross_val_score, 
                                      RandomizedSearchCV)
 
-from gazer import __importflags__
-if __importflags__[0]: import keras
-if __importflags__[1]: import xgboost
-
-    
 from .base import EnsembleBaseClassifier, BaseClassifier
 from .algorithms import implemented        
 from .utils import skopt_space_mapping
 from .metrics import get_scorer
 
 
+from gazer import __importflags__
+if __importflags__[0]: 
+    import keras
+if __importflags__[1]: 
+    import xgboost
 if not __package__:
     __package__ = __name__
 
+    
     
 class GazerMetaLearner():
     """        

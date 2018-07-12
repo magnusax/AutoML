@@ -72,11 +72,15 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
 
         chkpnt_dir : str, default: ''
             The directory to save model checkpoints (only weights are saved).
-
+        
+        validation_data, float, default: 0
+            Used by keras fit api. If >0 then use a fraction of the data as
+            validation data to estimate generalization error/overfitting.
+            
     """
     def __init__(self, epochs=50, batch_size=32, optimizer='adam', learning_rate=1e-3, 
                  n_hidden=2, p=0.1, dropout=True, batch_norm=False, decay_units=False, 
-                 input_units=250, chkpnt_dir='', chkpnt_per=1):
+                 input_units=250, chkpnt_dir='', chkpnt_per=1, validation_split=0.0):
     
         self.name = 'neuralnet'
         
@@ -85,6 +89,7 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
         self.chkpnt_dir = chkpnt_dir
         self.chkpnt_per = chkpnt_per
         
+        self.validation_split = validation_split
         
         # We need to know the shape of the data, and the number of classes
         # They are set prior to calling `fit` through a call to `set_architecture`
@@ -313,7 +318,7 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
                 epochs=self.network['epochs'],
                 callbacks=self.network['callbacks'],
                 verbose=verbose,
-                validation_split=0.1,
+                validation_split = self.validation_split,
                 **kwargs)     
 
             
