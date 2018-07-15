@@ -1,24 +1,30 @@
 from __future__ import print_function
 
-import os
-import sys
-import glob
-import copy
-import time
-import random
-import warnings
-import numpy as np
+import os, sys, time, copy, glob, random, warnings
 
-from tqdm import tqdm
+import numpy as np
 from scipy.stats import uniform
-from sklearn.externals import joblib
+from sklearn.externals import joblib 
 from sklearn.exceptions import NotFittedError
+from tqdm import tqdm_notebook as tqdm
 
 from .metrics import get_scorer
 from .sampling import Loguniform
 from .core import GazerMetaLearner
 from .library import library_config
 
+
+def single_fit(estimator, scorer, X, y, path, i, **kwargs):
+    modelfile = os.path.join(path, "model_{:04d}train.pkl".format(i))
+    try:
+        estimator.set_params(**kwargs).fit(X, y)
+        joblib.dump(estimator, modelfile)
+        return (modelfile, scorer(estimator.predict(X), y))
+    except:
+        fail = (None, float("-Inf"))
+        _, desc, _ = sys.exc_info()
+        warnings.warn("Could not fit and save: {}".format(desc))
+        return fail
 
 
 class GazerMetaEnsembler(object):
@@ -151,7 +157,7 @@ class GazerMetaEnsembler(object):
                     return np.linspace(low, high, points, endpoint=True)
     
     
-    def fit(self, X, y, save_dir, scoring='accuracy', **kwargs):
+    def fit(self, X, y, save_dir, scoring='accuracy', n_jobs=1, verbose=0, **kwargs):
         """
         Fit an ensemble of algorithms.
         
@@ -173,7 +179,15 @@ class GazerMetaEnsembler(object):
             scoring : str or callable
                 Used when obtaining training data score
                 Fetches get_scorer() from local metrics.py module
-
+            
+            n_jobs : integer, default: 1
+                If n_jobs > 1 we use parallel processing to fit and save
+                scikit-learn models. 
+                Note: it is not used when training the neural network.
+                
+            verbose : integer, default: 0
+                Control verbosity during training process.
+                
             **kwargs: 
                 Variables related to scikit-learn estimator.
                 Used to alter estimator parameters if needed (such as e.g. n_jobs)
@@ -208,15 +222,13 @@ class GazerMetaEnsembler(object):
         # Get the scorer method
         scorer = get_scorer(scoring)
         
-        self.orchestrator = self._fit(X = X, 
-                                      y = y, 
-                                      save_dir = save_dir, 
-                                      scorer = scorer, 
-                                      **kwargs)
+        self.orchestrator = self._fit(X=X, y=y, save_dir=save_dir, 
+                                      scorer=scorer, n_jobs=n_jobs, 
+                                      verbose=verbose, **kwargs)
         return
     
         
-    def _fit(self, X, y, save_dir, scorer, **kwargs):
+    def _fit(self, X, y, save_dir, scorer, n_jobs, verbose, **kwargs):
         """ Implement the fitting """
         
         # Keep track of model and scores
@@ -224,43 +236,42 @@ class GazerMetaEnsembler(object):
         history = {}
                
         names = list(self.ensemble.keys())
-
-        # We want to train the network first, if present
-        name = 'neuralnet'
-        if name in names:
-            path = os.path.join(save_dir, name)
-            clf = self.ensemble.pop(name)
-            history[name] = self._add_networks(clf, X, y, path)
-            del clf
-            
-        for name, clfs in self.ensemble.items():
-            
-            path = os.path.join(save_dir, name)
-            os.makedirs(path)        
-            kwargs_ = kwargs.get(name, {})
-           
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-
-                models = []
-                for idx, estimator in enumerate(tqdm(clfs, desc="{}".format(name), ncols=120)):
-                    modelname = "{}_{:04d}train.pkl".format(name,(idx+1))
-                    modelfile = os.path.join(path, modelname)
-                    try:
-                        estimator.set_params(**kwargs_).fit(X, y)
-                    except:
-                        _, desc, _ = sys.exc_info()
-                        raise NotFittedError("Could not fit: {}".format(desc))
-                    try:
-                        joblib.dump(estimator, modelfile)
-                    except:
-                        raise Exception("Could not pickle: {}".format(modelfile))
-                    models.append(
-                        (modelfile, scorer(estimator.predict(X), y)))
-            # Return sorted history dict  
-            history[name] = sorted(models, key=lambda x: -x[1])
+        for name in names:
+            os.makedirs(os.path.join(save_dir, name))        
         
+        # We want to train the network first, if present
+        _name = 'neuralnet'
+        if _name in names:
+            path = os.path.join(save_dir, _name)
+            clf = self.ensemble.pop(_name)
+            history[_name] = self._add_networks(clf, X, y, path)
+            del clf        
+        
+        for name, estimators in self.ensemble.items():            
+            path = os.path.join(save_dir, name)
+            kwargs_ = kwargs.get(name, {})               
+            
+            if n_jobs != 1:
+                models = joblib.Parallel(n_jobs=n_jobs, verbose=verbose, backend="threading")(
+                    joblib.delayed(single_fit)(estimator, scorer, X, y, path, i, **kwargs_) 
+                    for i, estimator in enumerate(estimators, start=1))
+            else:
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    models = []
+                    for i, estimator in enumerate(tqdm(estimators, desc="{}".format(name), ncols=120)):
+                        this_modelfile, this_score = single_fit(estimator, scorer, X, y, path, i, **kwargs_)
+                        models.append((this_modelfile, this_score))
+                    
+            history[name] = sorted(list(models), key=lambda x: -x[1]) 
+            
+        # Before returning: purge failed fits
+        for name, models in history.items():
+            valid = [(file, score) for file, score in models if file is not None]
+            history[name] = valid
+            
         return history
+    
     
     def _add_networks(self, clf, X, y, path):
         """Add to ensemble repository a set of keras neural network

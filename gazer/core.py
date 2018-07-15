@@ -376,7 +376,7 @@ class GazerMetaLearner():
             # Use keras api for convenience
             if name == 'neuralnet':
                 y_ = keras.utils.to_categorical(y.reshape(-1, 1))
-                loss, score = self.clf[name].estimator.evaluate(X, y_)
+                loss, score = self.clf[name].estimator.evaluate(X, y_, verbose=0)
                 scores[name] = {"score": np.round(score, decimals=4), 
                                 'loss': np.round(loss, decimals=4)}
                 del y_

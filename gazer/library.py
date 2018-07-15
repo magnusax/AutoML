@@ -157,7 +157,7 @@ def decision_tree_lib(nrow, ncol):
            get_config('max_depth', {}, depths) 
     
     
-def keras_net_lib():
+def keras_net_lib(nrow, ncol):
     """ 
     The Keras library classifier needs slightly different treatment 
     if we shall be able to include it in the ensemble library
@@ -165,6 +165,7 @@ def keras_net_lib():
     """
     # Used to set various properties of the network
     network = {
+        'external': True,
         'chkpnt_per': 2,
         'epochs': 100,
         'batch_size': 16,}    
