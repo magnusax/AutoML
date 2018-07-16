@@ -165,8 +165,8 @@ def keras_net_lib():
     """
     # Used to set various properties of the network
     network = {
-        'chkpnt_per': 2,
-        'epochs': 100,
+        'chkpnt_per': 1,
+        'epochs': 200,
         'batch_size': 16,}    
     
     return network

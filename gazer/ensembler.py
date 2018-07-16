@@ -13,6 +13,7 @@ from tqdm import tqdm
 from scipy.stats import uniform
 from sklearn.externals import joblib
 from sklearn.exceptions import NotFittedError
+from keras.models import clone_model
 
 from .metrics import get_scorer
 from .sampling import Loguniform
@@ -96,12 +97,18 @@ class GazerMetaEnsembler(object):
             if not standard_ensemble:
                 if name == 'neuralnet':
                     # Update neural network parameters
-                    self.learner.update(name, grid)                            
-                build[name] = self.learner.clf[name]
+                    #self.learner.update(name, grid)                            
+                #build[name] = self.learner.clf[name]
+                build[name] = grid
             else:
                 build[name] = self._gen_templates(name, grid)            
         return build
 
+    
+    def _gen_network_templates(self, learner, params, data, modelfiles):
+        from gazer.optimization import grid_search                               
+        *_ = grid_search(learner, params, data, name='neuralnet', modelfiles)
+        return 
     
     def _gen_templates(self, name, params):    
         """ Here we generate estimators to later fit """
@@ -373,12 +380,13 @@ class GazerMetaEnsembler(object):
         for name, path in clfs:
             
             if name=='neuralnet':
-                nn_model.estimator.load_weights(path)
-                clf = nn_model
+                clf = clone_model(nn_model.estimator)
+                clf.load_weights(path)
+                y_pred = clf.predict_classes(X_val)
             else:
                 clf = joblib.load(path)
-            
-            y_pred = clf.predict(X_val) 
+                y_pred = clf.predict(X_val) 
+                
             val_score = scorer(y_pred, y_val)            
             pool.append((clf, y_pred, val_score))
             val_scores_check.append(val_score)
@@ -411,47 +419,39 @@ class GazerMetaEnsembler(object):
                 np.random.choice(idxs, size=int(p*float(len(pool))), 
                                  replace=False)]        
         del idxs, idxs_mapper
-        
-        
-        impatience = 0
-        validation_scores = []
+                
         for it in range(1, iterations+1):
-
+            # Initialize 
             if it==1:
+                impatience = 0
                 best_idx = None
-                best_score = -float(1e4)
+                best_score = float("-Inf")
+                validation_scores = []
 
             for alg in algs:                
-                idx_ = alg[0]
+                idx = alg[0]
                 
                 # Copy ensemble and add algorithm
-                tst_ens = ensemble.copy()
-                tst_ens.append(alg)         
+                cand = ensemble.copy(); cand.append(alg)         
                 
                 # Copy ensemble weights and add +1 in weight
                 # to take the new addition into account
-                tst_wts = weights.copy()
-                tst_wts[idx_] += 1
+                wts = weights.copy(); wts[idx] += 1.0
                 
-                score_ = self.score(tst_ens, tst_wts, y_val, scorer)
+                score_ = self.score(cand, wts, y_val, scorer)
 
                 if score_ > best_score:
-                    best_idx, best_score, best_alg = (idx_, score_, [alg])
+                    best_idx, best_score, best_alg = (idx, score_, [alg])
             
             if best_score<=current_score:
                 impatience += 1
-            
+                
             elif best_score>current_score:
                 impatience = 0
             
             if best_score>=current_score: 
-                
-                # We only add a new algorithm if not previously in ensemble
-                # If it is contained in the ensemble, then increasing its
-                # weight will suffice in order to take the effect into account
                 if not best_alg in ensemble:
                     ensemble += best_alg
-
                 weights[best_idx] += 1.0
                 current_score = best_score
                 
@@ -462,8 +462,10 @@ class GazerMetaEnsembler(object):
             if impatience==7:
                 break
         
-        weighted_ensemble = [(clf, weights[id]) for id, clf, _ in ensemble]
-        # Sanity check:
+        weighted_ensemble = [(clf, weights[idx]) for idx, clf, _ in ensemble]
+        del wts, cand, ensemble
+        
+        # Final sanity check:
         for clf, wt in weighted_ensemble:
             if wt == 0: 
                 raise ValueError(
