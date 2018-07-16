@@ -180,15 +180,19 @@ def _search(learner, name, generator, data, number_of_fits, modelfiles, top_n):
 
 def _get_result(params_scores, top_n):
     
-     df = (pd.DataFrame
+    df = (pd.DataFrame
           .from_dict(params_scores)
           .sort_values('val_score', ascending=False))  
     
-    config = df.T.to_dict()[df.index[:top_n]]   
     cols = ['train_loss', 'val_loss', 
             'train_score', 'val_score']
-    for key in cols: 
-        del config[key]
+    config = []
+    d = df.T.to_dict()
+    for i in range(top_n):
+        conf = d[df.index[i]].copy()
+        for key in cols: del conf[key]
+        config.append(conf)
+        del conf
     
     df = df[[c for c in df.columns 
              if not c in cols]+cols]    

@@ -66,7 +66,13 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
         decay_units : boolean, default: False
             If False then keep the number of units constant at the value given by 'input_units'.
             If True then decay the number of units by a factor of 2 from layer to layer.
-
+        
+        gamma : float, default: 2.0
+            If decay_units=True, then number of units in layer L+1 is decreased by
+            a factor of gamma (constrained to lie in [1.5, 2.5]) compared to layer L.
+            - Note: if gamma input is less than 1.5 then gamma=1.5, and if gamma>2.5 then
+            gamma=2.5.
+            
         input_units : integer, default: 250
             The number of units (neurons) to use in the input layer.
 
@@ -80,7 +86,7 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
     """
     def __init__(self, epochs=50, batch_size=32, optimizer='adam', learning_rate=1e-3, 
                  n_hidden=2, p=0.1, dropout=True, batch_norm=False, decay_units=False, 
-                 input_units=250, chkpnt_dir='', chkpnt_per=1, validation_split=0.0):
+                 gamma=2.0, input_units=250, chkpnt_dir='', chkpnt_per=1, validation_split=0.0):
     
         self.name = 'neuralnet'
         
@@ -119,10 +125,12 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
             else:
                 raise ValueError("Incorrect '%s' type." % key)
         
+        self.gamma = np.clip(gamma, 1.5, 2.5)        
         self.network['decay_units'] = decay_units
+        
         # Handle neuron distribution per layer
         if self.network['decay_units']:
-            self.network['units'] = [max(1, int(input_units//2**i)) for i in range(n_hidden+1)]
+            self.network['units'] = [max(1, int(input_units//self.gamma**i)) for i in range(n_hidden+1)]
         else:
             self.network['units'] = [input_units] * (n_hidden+1)
             
