@@ -148,7 +148,7 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
             'does_multiclass': True,
             'does_regression': False, 
             'predict_probas': True, 
-            'standard_ensemble': False }
+            'external': True }
         
     def set_param(self, param, value):
         super().set_param(param, value)

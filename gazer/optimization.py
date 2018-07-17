@@ -9,6 +9,7 @@ Methods iter_safe, get_dicts are from:
 import os
 import copy
 import itertools
+import numpy as np
 import pandas as pd
 from tqdm import tqdm_notebook
 from sklearn.externals import joblib
@@ -46,10 +47,15 @@ def _train_eval(name, learner, data, params):
     # Evaluate on train + validation
     eval_kwargs = {'get_loss': True, 'verbose': 0}
     train = learner.evaluate(*train_data, **eval_kwargs)[name]
-    val = learner.evaluate(*val_data, **eval_kwargs)[name]
-      
+    
+    if val_data is None:
+        val = {'loss': np.nan, 'score': np.nan}
+    else:
+        val = learner.evaluate(*val_data, **eval_kwargs)[name]
+        
     return {'train_loss': train['loss'], 'train_score': train['score'],
             'val_loss': val['loss'], 'val_score': val['score']}
+
         
         
 def _save_model(estimator, file):
@@ -163,7 +169,11 @@ def _search(learner, name, generator, data, number_of_fits, modelfiles, top_n):
         param.update(_train_eval(name, learner, data, param))
         params_scores.append(param) 
         
-        this_score = param['val_score']        
+        # If no validation data, use train data to sort
+        this_score = param['val_score'] 
+        if np.isnan(this_score):
+            this_score = param['train_score']
+            
         rank = 0
         for score in scores:
             if score>=this_score: 
@@ -180,12 +190,17 @@ def _search(learner, name, generator, data, number_of_fits, modelfiles, top_n):
 
 def _get_result(params_scores, top_n):
     
-    df = (pd.DataFrame
-          .from_dict(params_scores)
-          .sort_values('val_score', ascending=False))  
-    
     cols = ['train_loss', 'val_loss', 
             'train_score', 'val_score']
+    
+    df = (pd.DataFrame
+          .from_dict(params_scores)
+          .sort_values(['val_loss', 'val_score', 'train_loss', 'train_score'], 
+                       ascending=[True, False, True, False]))  
+    
+    df = df[[c for c in df.columns 
+             if not c in cols]+cols]
+    
     config = []
     d = df.T.to_dict()
     for i in range(top_n):
@@ -193,7 +208,5 @@ def _get_result(params_scores, top_n):
         for key in cols: del conf[key]
         config.append(conf)
         del conf
-    
-    df = df[[c for c in df.columns 
-             if not c in cols]+cols]    
+        
     return config, df

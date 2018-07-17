@@ -1,4 +1,7 @@
 import numpy as np
+from scipy.stats import (uniform, 
+                         randint)
+
 
 
 def library_config(names, nrow, ncol):
@@ -15,7 +18,7 @@ def library_config(names, nrow, ncol):
         'random_forest': random_forest_lib(nrow, ncol),
         'tree': decision_tree_lib(nrow, ncol),
         'xgboost': xgboost_lib(nrow, ncol),
-        'neuralnet': keras_net_lib(), 
+        'neuralnet': keras_lib(), 
     }
     return list((name, grid) for name, grid in library.items() 
         if (name in names) and (grid is not None))
@@ -157,16 +160,34 @@ def decision_tree_lib(nrow, ncol):
            get_config('max_depth', {}, depths) 
     
     
-def keras_net_lib(nrow, ncol):
+def keras_lib():
     """ 
     The Keras library classifier needs slightly different treatment 
     if we shall be able to include it in the ensemble library
     
     """
-    # Used to set various properties of the network
-    network = {
-        'external': True,
-        'chkpnt_per': 2,
-        'epochs': 100,
-        'batch_size': 16,}    
-    return network
+    # Define the number of networks you want to keep for ensembling
+    n_networks = 10
+    
+    # Note that n_iter needs to be >= n_networks
+    n_iter = 20
+    
+    meta = {
+        'modelfiles': ['nn_model_{:04d}train.h5'.format(i) 
+                       for i in range(1, n_networks+1)],        
+        'n_iter': max(n_iter, n_networks) }
+    
+    param_grid = {
+        'epochs': randint(5, 31),
+        'input_units': randint(200, 1201),
+        'dropout': [True],
+        'p': uniform(0,0.7),
+        'batch_size': randint(16, 129),
+        'batch_norm': [False, True],
+        'n_hidden': randint(2,5),   
+        'decay_units': [True],
+        'learning_rate': [1e-3 * x for x in range(1, 11)],
+        'optimizer': ['adam', 'adadelta', 'sgd', 'rmsprop'],
+        'gamma': uniform(0.95, 2.05), }    
+    
+    return (meta, param_grid)
