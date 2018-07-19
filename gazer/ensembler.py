@@ -415,27 +415,30 @@ class GazerMetaEnsembler(object):
               
         # Cache predictions
         if len(clfs)>0:
-            algs = joblib.Parallel(n_jobs=n_jobs, verbose=verbose, backend="threading")(
-                joblib.delayed(_sklearn_score_fitted)(path, X_val, y_val, scorer) for name, path in clfs)    
+            algs = joblib.Parallel(n_jobs=n_jobs, 
+                                   verbose=verbose, 
+                                   backend="threading")(
+                joblib.delayed(_sklearn_score_fitted)(path, X_val, y_val, scorer) 
+                for name, path in clfs)    
         else: algs = []
         del clfs
         
         if len(nets)>0:
-            nalgs = joblib.Parallel(n_jobs=n_jobs, verbose=verbose, backend="threading")(
-                joblib.delayed(_keras_score_fitted)(path, X_val, y_val, scorer) for name, path in nets)
+            nalgs = joblib.Parallel(n_jobs=n_jobs, 
+                                    verbose=verbose, 
+                                    backend="threading")(
+                joblib.delayed(_keras_score_fitted)(path, X_val, y_val, scorer) 
+                for name, path in nets)
         else: nalgs = []
         del nets
         
         pool = [al for al in algs+nalgs if not al is None]  
         del algs, nalgs
         
-        # Compute scores
-        val_scores_check = [score for *_, score in pool]    
-            
+                 
         # Sort by score on validation set. Add index.
         pool = [(str(idx), clf, y_pred) for idx, (clf, y_pred, _) 
-                in enumerate(sorted(pool, key=lambda x: -x[2]))]    
-        
+                in enumerate(sorted(pool, key=lambda x: -x[2]))]            
         # Define weights
         weights = {idx: 0.0 for idx, *_ in pool}    
 
@@ -447,19 +450,15 @@ class GazerMetaEnsembler(object):
         
         if verbose > 0:        
             print("Single model max validation score = {}"
-                   .format(np.round(max(val_scores_check), decimals=4)))        
+                   .format(np.round(max([score for *_, score in pool]), decimals=4)))        
             print("Best model was: {}"
                    .format(ensemble[0][1]))
             print("Ensemble: initial {}-score: {:.5f}"
                    .format(scoring, current_score))
               
-        # Choose a subset of algorithms to use in bootstrap 
-        idxs = self._get_idx(pool)
-        idxs_mapper = {idx:(idx, clf, pr) for idx, clf, pr in pool}       
-        algs = [idxs_mapper[idx] for idx in np.random.choice(idxs, 
-                                                             size = int(p*float(len(pool))), 
-                                                             replace = False)]        
-        del idxs, idxs_mapper                
+        # Sample a subset of algorithms
+        algs = self._sample_algs(p, pool)
+               
         for it in range(1, iterations+1):
             
             # Initialize 
@@ -491,35 +490,30 @@ class GazerMetaEnsembler(object):
                 print("Iteration: {} \tScore: {:.5f}"
                        .format(it, current_score))
             
-        # Gather ensemble
-        weighted_ensemble = [
-            (path_to_model, weights[idx]) for idx, path_to_model, _ in ensemble]
+        weighted_ensemble = [(path_to_model, weights[idx]) 
+                             for idx, path_to_model, _ in ensemble]
                 
-        # Final sanity check:
         for path_to_model, wt in weighted_ensemble:
             if wt == 0: 
                 warnings.warn("Estimator {} has weight = 0."
-                               .format(path_to_model))
-                  
+                               .format(path_to_model))                  
         return validation_scores, weighted_ensemble
         
         
     def score(self, ensemble, weights, y, scorer):
-        """ Compute weighted majority vote """
-        
+        """ Compute weighted majority vote 
+        """        
         wts = np.zeros(len(ensemble))
-        preds = np.zeros((len(y), len(ensemble)), dtype=int)
-        
+        preds = np.zeros((len(y), len(ensemble)), dtype=int)        
         for j, (idx, _, pred) in enumerate(ensemble):
             wts[j] = float(weights[idx])
-            preds[:, j] = pred
-        
+            preds[:, j] = pred        
         return self._weighted_vote_score(wts, preds, y, scorer)
 
     
     def _weighted_vote_score(self, wts, preds, y, scorer):  
-        """ Score an ensemble of classifiers using weighted voting """
-        
+        """ Score an ensemble of classifiers using weighted voting. 
+        """
         y_hat = np.zeros(len(y))
         
         for i in range(preds.shape[0]):
@@ -536,9 +530,20 @@ class GazerMetaEnsembler(object):
                     ind = (preds[i,:] == cls)
                     conviction.append((cls, np.sum(wts[ind])))
                 label = np.int8(sorted(conviction, key=lambda x: -x[1])[0][0])
-                y_hat[i] = label
-                
+                y_hat[i] = label                
         return scorer(y_hat, y)
+    
+    
+    def _sample_algs(self, p, pool):        
+        idxs_mapper = {idx: (idx, clf, pr) for idx, clf, pr in pool}               
+        if isinstance(p, float):
+            size = int(p * float(len(pool)))
+        elif isinstance(p, int):
+            size = p        
+        return [idxs_mapper[idx] for idx in 
+                np.random.choice(self._get_idx(pool), 
+                                 size=size, replace=False)]
+            
     
     def _get_idx(self, item):
         return [idx for idx, *_ in item]

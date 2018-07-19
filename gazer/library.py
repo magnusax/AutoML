@@ -167,10 +167,10 @@ def keras_lib():
     
     """
     # Define the number of networks you want to keep for ensembling
-    n_networks = 10
+    n_networks = 80
     
     # Note that n_iter needs to be >= n_networks
-    n_iter = 20
+    n_iter = 100
     
     meta = {
         'modelfiles': ['nn_model_{:04d}train.h5'.format(i) 

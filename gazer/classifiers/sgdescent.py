@@ -18,7 +18,7 @@ class MetaSGDClassifier(BaseClassifier):
         self.init_params['alpha'] = alpha
         self.init_params['l1_ratio'] = l1_ratio
         self.init_params['fit_intercept'] = fit_intercept
-        self.init_params['n_iter'] = max_iter
+        self.init_params['max_iter'] = max_iter
         self.init_params['learning_rate'] = learning_rate
         self.init_params['random_state'] = random_state
         

@@ -10,9 +10,10 @@ import collections
 import numpy as np
 import pandas as pd
 
-import keras
 import keras.backend as K
 from keras.models import Sequential
+from keras.utils import to_categorical
+from keras.wrappers.scikit_learn import KerasClassifier
 
 from keras.callbacks import (
         EarlyStopping,
@@ -93,9 +94,9 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
         # Control callbacks (enable checkpointing, etc.)
         self.ensemble = False
         self.chkpnt_dir = chkpnt_dir
-        self.chkpnt_per = chkpnt_per
-        
+        self.chkpnt_per = chkpnt_per        
         self.validation_split = validation_split
+        self.gamma = np.clip(gamma, 1.5, 2.5)        
         
         # We need to know the shape of the data, and the number of classes
         # They are set prior to calling `fit` through a call to `set_architecture`
@@ -107,8 +108,6 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
         self.network['lr'] = learning_rate
         self.network['optimizer'] = optimizer
         self.network['history'] = None
-        self.network['chkpnt_period'] = 1
-
         
         # Specify architecture
         self.network['n_hidden'] = n_hidden
@@ -125,12 +124,12 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
             else:
                 raise ValueError("Incorrect '%s' type." % key)
         
-        self.gamma = np.clip(gamma, 1.5, 2.5)        
+        # Handle neuron distribution per layer
         self.network['decay_units'] = decay_units
         
-        # Handle neuron distribution per layer
         if self.network['decay_units']:
-            self.network['units'] = [max(1, int(input_units//self.gamma**i)) for i in range(n_hidden+1)]
+            self.network['units'] = [max(1, int(input_units//self.gamma**i)) 
+                                     for i in range(n_hidden+1)]
         else:
             self.network['units'] = [input_units] * (n_hidden+1)
             
@@ -143,12 +142,12 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
     
     
     def get_info(self):
-        return {
-            'does_classification': True,
-            'does_multiclass': True,
-            'does_regression': False, 
-            'predict_probas': True, 
-            'external': True }
+        return {'does_classification': True,
+                'does_multiclass': True,
+                'does_regression': False, 
+                'predict_probas': True, 
+                'external': True }
+        
         
     def set_param(self, param, value):
         super().set_param(param, value)
@@ -165,10 +164,10 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
             
         # The `output_shape` is simply the number of class labels    
         self.output_shape = output_shape
-        self.ready = True
-        
+        self.ready = True        
         return
-           
+       
+        
     def _get_clf(self):
 
         """ 
@@ -258,18 +257,19 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
     
     
     def lr_finder(self, X, y, monitor='acc', step_size=2000):
-        """
-        Find optimal learning rate
+        """ Find optimal learning rate. """
         
-        """
         if not monitor in ('acc', 'loss'):
             raise ValueError("monitor should be either 'acc' or 'loss'.")
             
         if step_size is None:
-            # Authors recommend step_size = 2-8 * iterations_per_epoch
             step_size = 8 * int(np.ceil(X.shape[0]/float(self.network['batch_size'])))
-        clr = CyclicLR(base_lr=1e-6, max_lr=10.0, 
-                       step_size=step_size, mode='triangular', lr_find=True)
+            
+        clr = CyclicLR(base_lr=1e-6, 
+                       max_lr=10.0, 
+                       step_size=step_size, 
+                       mode='triangular', 
+                       lr_find=True)
         
         # Save previous values in in order to be 
         # able to restore when finished
@@ -292,61 +292,85 @@ class MetaNeuralNetworkClassifier(BaseClassifier):
         return (xlr, ylr)
         
         
-    def y_check(self, y, verbose=0):
-        from keras.utils import to_categorical
-        y_ = y.copy()
-        if len(y_.shape)==1: 
-            y_ = y_.reshape(-1,1)
-            if verbose > 0:
-                warnings.warn(
-                    """Keras expects one-hot encoded label data: 
-                       your data does not seem to fit this requirement.
-                       \nWill attempt to apply one-hot encoding before 
-                       sending to `fit` method.""")
-            return to_categorical(y.reshape(-1,1))
-        else:
-            return y_
-        
-        
     def fit(self, X, y, verbose=0, **kwargs):
-        
-        y_ = self.y_check(y, verbose)
-                              
-        # This will only happen once as `set_architecture` modifies
-        # this variable. Successive calls to `fit` will not cause
-        # a recompilation of the model (i.e. you don't need to start from scratch!)
-        if self.ready == False:
-            # Freeze architecture
-            self._set_architecture(X.shape[1], y_.shape[1])
-            
-            # Define estimator and compile keras model
-            self.estimator = self._get_clf()
-        
-        self.network['callbacks'] = self._callbacks()
-        
-        self.network['history'] = \
-            self.estimator.fit(
-                X, y_, 
-                batch_size=self.network['batch_size'], 
-                epochs=self.network['epochs'],
-                callbacks=self.network['callbacks'],
-                verbose=verbose,
-                validation_split = self.validation_split,
-                **kwargs)     
-
-            
-    def predict(self, X):
         """
-        In some cases we need to override the canonical predict method
-        normally used by keras api.
+        ### Copied from 'KerasClassifier' fit function ###
+        Fit model to training data.
+        
+        Parameters:
+        ------------
+            X : array-like or matrix-like, shape (n_samples, n_features)
+                Training data.
+                
+            y : array-like, shape (n_samples,)
+                Training labels used as ground 
+                truth to optimize.
+                
+            verbose : int, default: 0 (quiet)
+                Optional verbosity parameter.
+                
+            **kwargs : dictionary
+                Additional input arguments to 
+                'Sequential.fit'.
         
         """
-        if self.estimator is not None:
-            y_pred = []
-            for pr in self.estimator.predict(X):
-                pr = list(pr)
-                cls = pr.index(max(pr))
-                y_pred.append(cls)
-            return np.array(y_pred)
+        y = np.array(y)
+        if len(y.shape) == 2 and y.shape[1] > 1:
+            self.classes_ = np.arange(y.shape[1])
+        elif ((len(y.shape) == 2 and y.shape[1] == 1) 
+              or len(y.shape) == 1):
+            self.classes_ = np.unique(y)
+            y = np.searchsorted(self.classes_, y)
         else:
-            raise Exception("Call 'fit' first.")
+            raise ValueError('Invalid shape for y: {}'
+                             .format(y.shape))       
+        self.n_classes_ = len(self.classes_)
+        
+        if not self.ready:
+            self._set_architecture(X.shape[1], 
+                                   self.n_classes_)            
+            self.estimator = self._get_clf()       
+        
+        loss_name = self.estimator.loss
+        if hasattr(loss_name, '__name__'):
+            loss_name = loss_name.__name__
+        if (loss_name == 'categorical_crossentropy' 
+            and len(y.shape) != 2):
+            y = to_categorical(y)
+                
+        self.network['history'] = self.estimator.fit(X, y, 
+                                                     batch_size = self.network['batch_size'],
+                                                     epochs = self.network['epochs'],
+                                                     validation_split = self.validation_split,
+                                                     callbacks = self.network['callbacks'],
+                                                     verbose = verbose, **kwargs)
+        return
+    
+    
+    def predict(self, X, **kwargs):
+        """
+        ### Copied from 'KerasClassifier' predict function ###
+        Returns the class predictions for the given test data.
+        
+        Parameters:
+        ------------
+            X : array-like, shape (n_samples, n_features)
+                Test samples where n_samples is the number of samples
+                and n_features is the number of features.
+
+            **kwargs : dictionary arguments
+                Legal arguments are the arguments
+                of 'Sequential.predict_classes'.
+
+        Returns:
+        ---------
+            preds : array-like, shape (n_samples,)
+                Class predictions.
+        """
+        proba = self.estimator.predict(X, **kwargs)
+
+        if proba.shape[-1] > 1:
+            classes = proba.argmax(axis=-1)
+        else:
+            classes = (proba > 0.5).astype('int32')
+        return self.classes_[classes]    

@@ -241,6 +241,7 @@ class GazerMetaLearner():
                 module = import_module(path_to_module, package=False)
             except ImportError: 
                 warnings.warn("Could not import {}".format(module_name), RuntimeWarning)
+                print(sys.exc_info()[1])
                 return None
         
         algorithm = getattr(module, algorithm_name)        
@@ -276,23 +277,25 @@ class GazerMetaLearner():
                 Perform parallel computation if implemented in algorithm.
         
         """
-        return self._fit(X=X, y=y, n_jobs=n_jobs)
+        self._fit(X=X, y=y, n_jobs=n_jobs)
     
     
-    def _fit(self, X, y, n_jobs=1):        
+    def _fit(self, X, y, n_jobs):                
         
-        for name, clf in self.clf.items():
-            st = time.time()            
+        for name, clf in self.clf.items():            
+            start = time.time()            
+            
             if hasattr(clf, 'fit'):
                 clf.fit(X, y, verbose=self.verbose)
             else:
-                if n_jobs>1 and hasattr(clf.estimator, 'n_jobs'):
+                if n_jobs != 1 and hasattr(clf.estimator, 'n_jobs'):
                     clf.estimator.set_params(**{'n_jobs': n_jobs})
                 clf.estimator.fit(X, y)
-            if self.verbose > 0:
-                print("%s: training time = %.2f (min)" 
-                      % (name, (time.time()-st)/60.))
-        return self
+            
+            if self.verbose>0:
+                delta = time.time()-start
+                print("{}: training time = {:.1f} min.".format(name, delta/float(60)))
+        return
     
     
     def set_params(self, name, params):
@@ -315,15 +318,18 @@ class GazerMetaLearner():
     
 
     def predict(self, X):
-        return [(name, clf.estimator.predict(X)) for name, clf in self.clf.items()]
+        # Wrap 'predict' using a Lambda expression
+        predict = (lambda clf, X: clf.predict(X) if hasattr(clf, 'predict') 
+                                               else clf.estimator.predict(X))        
+        return [(name, predict(clf, X)) for name, clf in self.clf.items()]
     
 
     def predict_proba(self, X):
         probas = []
         for name, clf in self.clf.items():
-            info = clf.get_info()
-            if info['predict_probas']:
-                probas.append((name, clf.estimator.predict_proba(X)))
+            if clf.get_info()['predict_probas']:
+                probas.append(
+                    (name, clf.estimator.predict_proba(X)))
         return probas
     
 
@@ -352,62 +358,35 @@ class GazerMetaLearner():
         
         Returns:
         ---------
-        A list of 3-tuples (one for each algorithm) in the following form: 
-        (name, metric score, log loss). If get_loss = False, then 'log loss' 
-        will be set to "N/A".
+            scores : dictionary
+                Specifies loss and score for each algorithm.
+                - Format: {name: {'score': score, 'loss': loss}}
         
         """
-        y_preds = self.predict(X)
+        if metric is None:
+            raise ValueError("Please specify a metric")        
+        scorer = get_scorer(metric)
+        
+        scores = {}
+        for name, y_pred in self.predict(X):            
+            score = scorer(y, y_pred) 
+            scores[name] = {'score': np.round(score, decimals=4), 'loss': 'N/A'}        
         
         if get_loss:
-            log_loss = get_scorer('log_loss')
-            probas = self.predict_proba(X)
-                
-        if metric is None:
-            raise ValueError("Please specify a metric")
-        
-        # Desired scorer
-        scorer = get_scorer(metric)
-               
-        # Keep track of score for every algorithm
-        scores = {}
-        for name, y_pred in y_preds:
-            
-            # Use keras api for convenience
-            if name == 'neuralnet':
-                y_ = keras.utils.to_categorical(y.reshape(-1, 1))
-                loss, score = self.clf[name].estimator.evaluate(X, y_, verbose=0)
-                scores[name] = {"score": np.round(score, decimals=4), 
-                                'loss': np.round(loss, decimals=4)}
-                del y_
-                continue
-                
-            score = scorer(y, y_pred)                        
-            implements_proba = self.clf[name].get_info()['predict_probas']            
-            
-            if get_loss and implements_proba:
+            log_loss = get_scorer('log_loss')            
+            for name, proba in self.predict_proba(X):               
                 try:
-                    y_proba = [x for nme, x in probas if nme==name][0]
-                    loss = log_loss(y, y_proba)  
-                    scores[name] = {"score": np.round(score, decimals=4), 
-                                    'loss': np.round(loss, decimals=4)}
+                    loss = log_loss(y, proba)
+                    scores[name]['loss'] = np.round(loss, decimals=4)
                 except:
-                    scores[name] = {"score": np.round(score, decimals=4), 'loss': np.nan}
-                    warnings.warn("Could not compute log-loss for {}".format(name), RuntimeWarning)
-            else:                                
-                scores[name] = {"score": np.round(score, decimals=4), 'loss': 'N/A'}                        
-        
+                    scores[name]['loss'] = np.nan
+                    warnings.warn("Could not compute loss for {}"
+                                  .format(name), RuntimeWarning)                                       
         if self.verbose>0:
             for name, score in scores.items():
-                _score = score['score']
-                _loss = score['loss']
-                if isinstance(_loss, str):
-                    print("%s performance:\n\t Log-loss: %s \n\t Score: %.4f" 
-                      % (name, _loss, _score))
-                else:
-                    print("%s performance:\n\t Log-loss: %.4f \n\t Score: %.4f" 
-                      % (name, _loss, _score))
-        
+                print("{0:18} {1}".format(name+":", ",  ".join(
+                    ["{}={}".format(k,v) for k,v in score.items()])),
+                     end="\n{}\n".format("-" * 45))
         return scores
     
 
