@@ -411,60 +411,72 @@ class GazerMetaEnsembler(object):
                 if (name == 'neuralnet')]    
         clfs = [(name, path) for name, path in clfs 
                 if (name != 'neuralnet')]        
-        scorer = get_scorer(scoring)
-              
-        algs = joblib.Parallel(n_jobs=n_jobs, 
-                               verbose=verbose, 
-                               backend="threading")(
-            joblib.delayed(_sklearn_score_fitted)(path, X, y, scorer) 
-            for name, path in clfs) if clfs else []
-        time.sleep(1)
         
-        nalgs = joblib.Parallel(n_jobs=n_jobs, 
-                                verbose=verbose, 
-                                backend="threading")(
-            joblib.delayed(_keras_score_fitted)(path, X, y, scorer) 
-            for name, path in nets) if nets else []
+        scorer = get_scorer(scoring)
+        
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')      
+            algs = joblib.Parallel(n_jobs=n_jobs, 
+                                   verbose=verbose, 
+                                   backend="threading")(
+                joblib.delayed(_sklearn_score_fitted)(path, X, y, scorer) 
+                for name, path in clfs) if clfs else []
+            time.sleep(1)
+            nalgs = joblib.Parallel(n_jobs=n_jobs, 
+                                    verbose=verbose, 
+                                    backend="threading")(
+                joblib.delayed(_keras_score_fitted)(path, X, y, scorer) 
+                for name, path in nets) if nets else []
 
         pool = [al for al in algs+nalgs if not al is None]          
         algs=None; clfs=None; nets=None; nalgs=None        
-                 
+        
+        if verbose > 0:        
+            print("Single model max validation score = {}"
+                   .format(np.round(max([score for *_, score in pool]), decimals=4)))  
+        
         pool = [(str(idx), clf, y_pred) for idx, (clf, y_pred, _) 
-                in enumerate(sorted(pool, key=lambda x: -x[2]))]            
-        
+                in enumerate(sorted(pool, key=lambda x: -x[2]))]                    
         ensemble = pool[:grab]        
-        
+    
         weights = {idx: 0.0 for idx, *_ in pool}    
         for idx, *_ in ensemble:
             weights[idx] = 1.0
         
-        if verbose > 0:        
-            print("Single model max validation score = {}"
-                   .format(np.round(max([score for *_, score in pool]), decimals=4)))        
-            print("Best model was: {}".format(ensemble[0][1]))        
+        if verbose > 0:
+            print("Best model was: {}".format(ensemble[0][1]))                         
     
-        current_score = self.score(ensemble, weights, y, scorer)        
+        result = []
+        for _ in range(iterations):
+            # NB: do we wish to control the random seed here? (Reproducibility, etc.)
+            wens = self._hillclimb_loop(X=X, y=y, scorer=scorer, ensemble=ensemble, 
+                                        weights=weights, pool=pool, p=p, verbose=verbose)
+            if wens: result.append(wens)
+        
         scores = []
-        ensembles = [] 
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore')
-            for _ in range(iterations):
-                # NB: do we wish to control the random seed here? (Reproducibility, etc.)
-                sc, en = _hillclimb_loop(X=X, y=y, scorer=scorer, current_score=current_score,
-                                         ensemble=ensemble, weights=weights, pool=pool, p=p, 
-                                         verbose=verbose)
-                scores.append(sc)
-                ensembles.append(en)
-        best_score = max(scores, key=lambda x: x[1])
-        best_ensemble = ensembles[scores.index(best_score)]
-        return best_score, best_ensemble
+        ensembles = []
+        for ensemble in result:
+            scores.append(ensemble[-1])
+            ensembles.append(ensemble[:-1])        
+        max_score = max(scores)
+        
+        return max_score, ensembles[scores.index(max_score)]
     
-    def _hillclimb_loop(X, y, scorer, current_score, ensemble, weights, pool, p, verbose, seed=None):
-        """ Hillclimb loop. """
+    
+    def _hillclimb_loop(self, X, y, scorer, ensemble, weights, pool, p, verbose, seed=None):
+        """ Hillclimb loop. 
+        
+        """      
+        __ensemble__ = ensemble.copy()
+        __weights__ = weights.copy()
+        __curr_score__ = self.score(__ensemble__, __weights__, y, scorer)
+       
+        if verbose > 0:
+            print("Initial ensemble score = {:.5f}".format(__curr_score__))
         
         if seed is not None:
             np.random.seed(seed)           
-        mini_pool = self._sample_algs(p, pool)
+        __pool__ = self._sample_algs(p, pool)
     
         # In practice we never max out
         for i in range(1, 100):            
@@ -474,40 +486,42 @@ class GazerMetaEnsembler(object):
                 best_idx = -1
                 val_scores = []
             
-            for alg in mini_pool:                
+            for alg in __pool__:                
                 idx = alg[0]                
-                _ensemble = ensemble.copy()
-                _ensemble.append(alg)                         
-                _wts = weights.copy()
-                _wts[idx] += 1.0
+                ens = __ensemble__.copy()
+                ens.append(alg)                         
+                wts = __weights__.copy()
+                wts[idx] += 1.0
                 
-                this_score = self.score(_ensemble, _wts, y, scorer)            
+                this_score = self.score(ens, wts, y, scorer)            
                 if this_score > best_score:
                     best_idx = idx
                     best_score = this_score
                     best_alg = [alg]
             
-            if best_score<=current_score:
+            if best_score <= __curr_score__:
                 print("Could not improve further. Updated score was: {:.5f}"
                        .format(best_score))
                 break            
             
-            elif best_score > current_score: 
-                current_score = best_score
-                weights[best_idx] += 1.0                
-                if not best_idx in self._get_idx(ensemble):
-                    ensemble += best_alg
+            elif best_score > __curr_score__: 
+                __curr_score__ = best_score
+                __weights__[best_idx] += 1.0                
+                if not best_idx in self._get_idx(__ensemble__):
+                    __ensemble__ += best_alg
             
-            val_scores.append((i, current_score))
+            val_scores.append((i, __curr_score__))
             if verbose > 0:
                 print("Ensemble loop iter: {} \tScore: {:.5f}"
-                      .format(val_scores[-1]))
-            
+                      .format(*val_scores[-1]))
             
         weighted_ensemble = [
-            (path_to_model, weights[idx]) for idx, path_to_model, _ in ensemble
-        ]
-        return val_scores, weighted_ensemble
+            (path_to_model, __weights__[idx]) 
+            for idx, path_to_model, _ in __ensemble__]
+        
+        weighted_ensemble.append(val_scores[-1][-1])
+        
+        return weighted_ensemble
         
         
     def score(self, ensemble, weights, y, scorer):
@@ -531,22 +545,23 @@ class GazerMetaEnsembler(object):
             _classmapper[i] = cls
             belief = np.matmul(preds[:,:]==cls, wts)
             weighted = belief if i==0 else np.vstack((weighted, belief))
-        predicted_class = np.array([_classmapper[idx] for idx 
-                                    in np.argmax(np.transpose(weighted), axis=1)])        
-        assert len(predicted_class) == len(y)
-       
+        predicted_class = np.array(
+            list(map(lambda idx: _classmapper[idx], np.argmax(weighted.T, axis=1))))             
         return scorer(predicted_class, y)
     
     
     def _sample_algs(self, p, pool):        
-        idxs_mapper = {idx: (idx, clf, pr) for idx, clf, pr in pool}               
+        _idxmapper = {idx: (idx, clf, pr) for idx, clf, pr in pool}               
         if isinstance(p, float):
             size = int(p * float(len(pool)))
         elif isinstance(p, int):
             size = p        
-        return [idxs_mapper[idx] for idx in 
-                np.random.choice(self._get_idx(pool), 
-                                 size=size, replace=False)]
-                
+        return list(map(lambda idx: _idxmapper[idx], np.random.choice(self._get_idx(pool), 
+                                                               size=size, replace=False)))
+        #return [idxs_mapper[idx] for idx in 
+        #        np.random.choice(self._get_idx(pool), 
+        #                         size=size, replace=False)]
+         
+            
     def _get_idx(self, item):
         return [idx for idx, *_ in item]
