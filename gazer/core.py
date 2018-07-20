@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 import sys
 import time
 import inspect
@@ -8,7 +10,6 @@ from importlib import import_module
 import numpy as np
 
 from skopt import gp_minimize
-from sklearn.preprocessing import LabelBinarizer
 from sklearn.model_selection import (cross_val_score, 
                                      RandomizedSearchCV)
 
@@ -277,11 +278,6 @@ class GazerMetaLearner():
                 Perform parallel computation if implemented in algorithm.
         
         """
-        self._fit(X=X, y=y, n_jobs=n_jobs)
-    
-    
-    def _fit(self, X, y, n_jobs):                
-        
         for name, clf in self.clf.items():            
             start = time.time()            
             
@@ -293,8 +289,8 @@ class GazerMetaLearner():
                 clf.estimator.fit(X, y)
             
             if self.verbose>0:
-                delta = time.time()-start
-                print("{}: training time = {:.1f} min.".format(name, delta/float(60)))
+                delta = (time.time()-start)/float(60)
+                print("{}: training time = {:.1f} min.".format(name, delta))
         return
     
     
@@ -318,19 +314,51 @@ class GazerMetaLearner():
     
 
     def predict(self, X):
+        """
+        Compute class labels from data matrix 'X'.
+        
+        Parameters:
+        -----------
+            X : array-like, matrix-like
+                Data with shape (n_samples, n_features) 
+                to predict on.
+                
+        Returns:
+        ---------
+            labels : list of (name, class_label) tuples where
+            'name' is name of algorithm, and class_label is a numpy
+            array of shape (n_samples,).
+            - Length of labels: len('GazerMetaLearner().names')
+
+        """
         # Wrap 'predict' using a Lambda expression
-        predict = (lambda clf, X: clf.predict(X) if hasattr(clf, 'predict') 
-                                               else clf.estimator.predict(X))        
+        predict = (lambda clf, x: clf.predict(x) if hasattr(clf, 'predict') 
+                                               else clf.estimator.predict(x))        
         return [(name, predict(clf, X)) for name, clf in self.clf.items()]
     
 
     def predict_proba(self, X):
-        probas = []
-        for name, clf in self.clf.items():
-            if clf.get_info()['predict_probas']:
-                probas.append(
-                    (name, clf.estimator.predict_proba(X)))
-        return probas
+        """
+        Compute class probabilities from data matrix 'X'.
+        
+        Parameters:
+        -----------
+            X : array-like, matrix-like
+                Data with shape (n_samples, n_features) 
+                to predict on.
+        
+        Returns:
+        ---------
+            probas : list of (name, class_proba) tuples where
+            'name' is name of algorithm, and class_proba is a numpy
+            array of shape (n_samples, n_classes).
+            - Length of probas: len('GazerMetaLearner().names')
+         
+        """
+        # Wrap 'predict_proba' using Lambda expression
+        predict_proba = (lambda clf, x: clf.estimator.predict_proba(x) 
+                         if clf.get_info()['predict_probas'] else np.zeros(x.shape[0]))
+        return [(name, predict_proba(clf, X)) for name, clf in self.clf.items()] 
     
 
     def evaluate(self, X, y, metric='accuracy', get_loss=True, **kwargs):
