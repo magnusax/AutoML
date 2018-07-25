@@ -44,12 +44,10 @@ def get_dicts(d):
 def train_eval(name, learner, data, params):
     """ Update, train and evaluate. 
     """        
-    learner.update(name, params)
-    
-    train_data, val_data = (data['train'], data['val'])
-    learner.fit(*train_data)    
-        
     kwargs = {'get_loss': True, 'verbose': 0}    
+    train_data, val_data = (data['train'], data['val'])    
+    learner.update(name, params)    
+    learner.fit(*train_data)            
     train = learner.evaluate(*train_data, **kwargs)[name]    
     
     if val_data is None:
@@ -146,19 +144,16 @@ def param_search(learner, param_grid, data, type_of_search,
     except:
         pass    
     
-    with Mute(learner):
-        
+    with Mute(learner):        
         if type_of_search == 'random':
             generator = ParameterSampler(param_grid, n_iter=n_iter)
             number_of_fits = n_iter
-
         elif type_of_search == 'grid':
             generator = get_dicts(param_grid)
             number_of_fits = len(list(get_dicts(param_grid)))    
-
         else:
             raise ValueError("type_of_search should be in ('grid', 'random').")
-
+        
         config, df = _search(learner=learner, name=name, generator=generator,
                             data=data, number_of_fits=number_of_fits,
                             modelfiles=modelfiles, top_n=top_n)    
@@ -175,14 +170,13 @@ def _search(learner, name, generator, data, number_of_fits, modelfiles, top_n):
     for params in tqdm(generator, desc=name, total=number_of_fits):        
         
         params.update(train_eval(name, learner, data, params))
-        params_scores.append(params) 
-        
+        params_scores.append(params)         
         this_score = params['val_score'] 
         if np.isnan(this_score):
             this_score = params['train_score']
                 
         if n_models > -1:       
-            rank = len(np.where(np.array(scores) >= this_score)[0])            
+            rank = len(np.where(np.array(scores)>=this_score)[0])            
             if rank < n_models:
                 for _rank in reversed(range(rank, n_models)):                                        
                     src, dest = (modelfiles[_rank], 

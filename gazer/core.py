@@ -418,17 +418,16 @@ class GazerMetaLearner():
         return scores
     
 
-    def crossval_optimize(self, X, y, n_iter=12, scoring='accuracy', cv=10, 
-                          n_jobs=1, sample_hyperparams=False, 
-                          min_hyperparams=None, get_hyperparams=False, random_state=None):
+    def rand_optimize(self, X, y, n_iter=12, scoring='accuracy', cv=10, n_jobs=1, 
+                      sample_params=False, min_params=2, get_params=False, random_state=None):
         """
         
-        This method is a wrapper to cross validation using RandomizedSearchCV from scikit-learn, 
-        wherein we optimize each defined algorithm
+        This method is a wrapper to cross validation using RandomizedSearchCV from scikit-learn 
+        wherein we optimize each defined algorithm.
         
         Default behavior is to optimize all parameters available to each algorithm, but it is 
-        possible to sample (randomly) a subset of them to optimize (sample_hyperparams=True), 
-        or to choose a set of parameters (get_hyperparams=True).
+        possible to sample (randomly) a subset of them to optimize (sample_params=True) 
+        or to choose a set of parameters (get_params=True).
         
         Parameters:
         ------------
@@ -440,7 +439,8 @@ class GazerMetaLearner():
             Labels/ground truth (n_samples,)
         
         n_iter : integer, default: 1
-            Number of iterations to use in RandomizedSearchCV method, i.e. number of independent draws from parameter dictionary
+            Number of iterations to use in RandomizedSearchCV method, 
+            i.e. number of independent draws from parameter dictionary
         
         scoring : string or callable, default: 'accuracy'
             Type of scorer to use in optimization
@@ -451,66 +451,64 @@ class GazerMetaLearner():
         n_jobs : integer, default: 1
             Specify number of parallel processes to use
         
-        sample_hyperparams : boolean, default: False
+        sample_params : boolean, default: False
             Randomly sample a subset of algorithm parameters and tune these  
         
-        min_hyperparams: optional, integer, default: 2
-            When sample_hyperparams=True, choose number of parameters to sample
+        min_params: optional, integer, default: 2
+            When sample_params=True, choose number of parameters to sample
         
-        get_hyperparams: optional, boolean, default: 2
+        get_params: optional, boolean, default: 2
             Instead of random sampling, use previously chosen set of parameters to optimize
         
         random_state: None or integer, default: None
             Used for reproducible results
         
-        Ouput:
-        -------
-        List containing (classifier name, most optimized classifier) tuples       
+        Returns:
+        --------
+            List containing (classifier name, most optimized classifier) tuples       
         
-        """
-        
-        def _random_grid_search(p_index, clf, clf_name, param_dict):
-
-            clf_name = clf_name+"_v%i"%(p_index+1) if p_index>0 else clf_name
-
-            param_dist = param_dict.copy()           
-            if len(param_dist) == 0:
-                return (clf_name, clf.estimator.fit(X,y))
+        """        
+        def search(clf, params):        
+                        
+            if not params:
+                return (clf.estimator.fit(X, y), None)
+            pars = params.copy()                       
             
-            if sample_hyperparams and not get_hyperparams:
-                num_params = np.random.randint(min_hyperparams, len(param_dist))
-                param_dist = clf.set_tune_params(param_dist, num_params=num_params, mode='random')
-
-            if get_hyperparams and not sample_hyperparams:
-                if len(clf.cv_params_to_tune)>0:                    
-                    param_dist = clf.set_tune_params(param_dist, keys=clf.cv_params_to_tune, mode='select')            
+            if sample_params and not get_params:
+                kwargs = {'num_params': 
+                              np.random.randint(min_params, len(pars)), 
+                          'mode': 'random'}
             
-            n_iter_ = min(n_iter, clf.max_n_iter)        
-                      
-            random_search = RandomizedSearchCV(clf.estimator, param_distributions=param_dist, 
-                                               n_iter=n_iter_, scoring=scoring, cv=cv, n_jobs=n_jobs, 
-                                               verbose=0, error_score=0, random_state=random_state)            
+            elif get_params and not sample_params and clf.cv_params_to_tune:
+                kwargs = {'keys': clf.cv_params_to_tune, 
+                          'mode': 'select'}    
+            else:
+                kwargs = {}
+            
+            if kwargs:
+                pars = clf.set_tune_params(pars, **kwargs)   
+            niter = min(n_iter, clf.max_n_iter)        
+            randsearch = RandomizedSearchCV(clf.estimator, pars, 
+                                            n_iter=niter, scoring=scoring, cv=cv, 
+                                            n_jobs=n_jobs, random_state=random_state)            
             fitted = False
-            start_time = time.time()
+            start = time.time()
             try:
-                random_search.fit(X, y)
+                randsearch.fit(X, y)
                 fitted = True
             except:
-                warnings.warn("Failed to search through %s (returning basic 'fit'). \nInfo: %s" 
-                              % (clf_name, sys.exc_info()[1]))
-                return (clf_name, clf.estimator.fit(X,y))
+                return (clf.estimator.fit(X, y), None)
             else:
-                return (clf_name, random_search.best_estimator_)            
+                return (randsearch.best_estimator_, randsearch.best_score_)            
+            
             finally:
-                if self.verbose>0 and fitted:
-                    print("="*50)
-                    print("'%s' \tSearch time: %.2f min. \tBest score: %.5f" 
-                          % (clf_name, (time.time()-start_time)/60., random_search.best_score_))
-                    print("="*50)
+                if self.verbose > 0 and fitted:
+                    delta = (time.time()-start)/60.0
+                    print(">>> Search time: {:.1f} (min) \n>>> Best score: {:.4f}"
+                          .format(delta, randsearch.best_score_), end='\n\n') 
                     
-        return [_random_grid_search(i, clf, name, param) 
-                for name, clf in self.clf.items() 
-                for i, param in enumerate(clf.cv_params)]
+        return {"{}_{}".format(name, idx): search(clf, params) for name, clf in self.clf.items() 
+                for idx, params in enumerate(clf.cv_params, start=1)}
 
 
     def bayes_optimize(self, X, y, n_calls=50, scoring='accuracy', 
@@ -575,18 +573,19 @@ class GazerMetaLearner():
                 def feval(params):
                     pars = {_name: param for _name, param in zip(names, params)}
                     clf.estimator.set_params(**pars) 
-                    score = np.mean(cross_val_score(clf.estimator, X, y, 
-                                                    cv = cv, 
-                                                    scoring = scoring, 
-                                                    n_jobs = n_jobs))
+                    score = cross_val_score(clf.estimator, X, y, 
+                                            cv=cv, 
+                                            scoring=scoring, 
+                                            n_jobs=n_jobs)
+                    score = np.mean(score)
                     return -score if greater_is_better else score
                 
                 with warnings.catch_warnings():
                     warnings.simplefilter('ignore')
                     try:
                         res_gp = gp_minimize(feval, parspace, 
-                                             n_calls = n_calls, 
-                                             random_state = random_state)  
+                                             n_calls=n_calls, 
+                                             random_state=random_state)  
                     except:
                         warnings.warn("Optimization failed: {}".format(sys.exc_info()[1]))
                         continue
