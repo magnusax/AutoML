@@ -13,10 +13,10 @@ from skopt import gp_minimize
 from sklearn.model_selection import (cross_val_score, 
                                      RandomizedSearchCV)
 
-from .base import EnsembleBaseClassifier, BaseClassifier
-from .algorithms import implemented        
-from .utils import skopt_space_mapping
 from .metrics import get_scorer
+from .algorithms import implemented        
+from .utils.mappings import skopt_space_mapping
+from .base import EnsembleBaseClassifier, BaseClassifier
 
 
 from gazer import __importflags__

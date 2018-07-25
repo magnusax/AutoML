@@ -1,4 +1,5 @@
 """
+
 Credit:
 --------
 Methods iter_safe, get_dicts are from:
@@ -6,14 +7,21 @@ Methods iter_safe, get_dicts are from:
     convert-a-dictionary-of-iterables-into-an-iterator-of-dictionaries
 
 """
+
 import os
 import copy
+import shutil
 import itertools
+
 import numpy as np
 import pandas as pd
-from tqdm import tqdm_notebook
-from sklearn.externals import joblib
+
+from tqdm import tqdm_notebook as tqdm
 from sklearn.model_selection import ParameterSampler
+
+from .utils.meta import Mute
+from .utils.estimators import save_model
+
 
 
 def iter_safe(value):
@@ -25,59 +33,57 @@ def iter_safe(value):
         return (value,)
     else:
         return value
-    
+
     
 def get_dicts(d):
     keys, values_list = zip(*d.items())
     for values in itertools.product(*map(iter_safe, values_list)):
         yield dict(zip(keys, values))
+
         
-        
-# Internal convenience function
-def _train_eval(name, learner, data, params):
+def train_eval(name, learner, data, params):
     """ Update, train and evaluate. 
-    """     
-    # Update learner object with new params
+    """        
     learner.update(name, params)
     
-    # Train model, possibly save
     train_data, val_data = (data['train'], data['val'])
     learner.fit(*train_data)    
         
-    # Evaluate on train + validation
-    eval_kwargs = {'get_loss': True, 'verbose': 0}
-    train = learner.evaluate(*train_data, **eval_kwargs)[name]
+    kwargs = {'get_loss': True, 'verbose': 0}    
+    train = learner.evaluate(*train_data, **kwargs)[name]    
     
     if val_data is None:
         val = {'loss': np.nan, 'score': np.nan}
     else:
-        val = learner.evaluate(*val_data, **eval_kwargs)[name]
-        
-    return {'train_loss': train['loss'], 'train_score': train['score'],
-            'val_loss': val['loss'], 'val_score': val['score']}
-
-        
-        
-def _save_model(estimator, file):
+        val = learner.evaluate(*val_data, **kwargs)[name]        
     
-    dir_ = os.path.dirname(file)
-    if not os.path.isdir(dir_):
-        os.makedirs(dir_)
-    
-    try:
-        if hasattr(estimator, 'save'):   
-            # If we are here then 'estimator' is most likely a keras model
-            estimator.save(file, overwrite=True)       
-        else:
-            # Scikit-learn (default: overwrite)
-            joblib.dump(estimator, file)
-    except:
-        _, desc, _ = sys.exc_info()
-        raise Exception(
-            "Could not save model: {}".format(desc))
-    return
+    return {'train_loss': train['loss'], 
+            'train_score': train['score'],
+            'val_loss': val['loss'], 
+            'val_score': val['score']}
 
-                 
+
+def get_result(params_scores, top_n):
+    """ Extract CV results. 
+    """
+    cols = ['train_loss', 'val_loss', 'train_score', 'val_score']     
+    df = (pd.DataFrame
+          .from_dict(params_scores)
+          .sort_values(['val_score', 'val_loss', 'train_score', 'train_loss'], 
+                        ascending=[False, True, False, True]))    
+    df = df[[c for c in df.columns if not c in cols]+cols]
+    
+    config = []
+    d = df.T.to_dict()
+    for i in range(top_n):
+        conf = d[df.index[i]].copy()
+        for key in cols: del conf[key]
+        config.append(conf)
+        del conf
+        
+    return config, df
+
+
 def param_search(learner, param_grid, data, type_of_search, 
                  n_iter=12, name='neuralnet', modelfiles=[], top_n=1):
     """
@@ -115,48 +121,47 @@ def param_search(learner, param_grid, data, type_of_search,
             - A meta estimator identifier.
             - Must be present in learner.names.
             
-        modelfiles : list, default: empty list
-            - List with N elements, where N are names of the top N models
-            that should be saved to disk.
-            - If empty, no files are saved.
+        modelfiles : list or iterable of filenames, default: []
+            Filenames wherein to save models.
+            - Number of models to save is equal to len(modelfiles)
             
         top_n : integer, default: 1 
             Number of models to return in the model config dict.
             
     Returns:
     ---------
-    Tuple of (best) parameter configuration(s), and pandas dataframe with complete
-    overview of parameters and their train + validation scores for easy comparison.
+        Tuple of (best) parameter configuration(s), and pandas dataframe with complete
+        overview of parameters and their train + validation scores for easy comparison.
     
-    - Number of parameter configurations set by 'top_n' parameter.
-    
+    Notes:
+    -------    
+    - Number of parameter configurations set by 'top_n' parameter.   
     - Note that the "best" configuration not necessarily corresponds to lowest 
-    generalization error.
+        generalization error.
     
     """    
-    # Keep silent during search
-    old_verbose = learner.verbose
-    if old_verbose>0:
-        learner.verbose = 0
+    try:
+        folder = os.path.dirname(modelfiles[0])
+        shutil.rmtree(folder)
+    except:
+        pass    
+    
+    with Mute(learner):
+        
+        if type_of_search == 'random':
+            generator = ParameterSampler(param_grid, n_iter=n_iter)
+            number_of_fits = n_iter
 
-    # Determine type of search
-    if type_of_search == 'random':
-        generator = ParameterSampler(param_grid, n_iter=n_iter)
-        number_of_fits = n_iter
+        elif type_of_search == 'grid':
+            generator = get_dicts(param_grid)
+            number_of_fits = len(list(get_dicts(param_grid)))    
 
-    elif type_of_search == 'grid':
-        generator = get_dicts(param_grid)
-        number_of_fits = len(list(get_dicts(param_grid)))    
-    
-    else:
-        learner.verbose = old_verbose
-        raise ValueError("type_of_search should be in ('grid', 'random').")
-    
-    config, df = _search(learner=learner, name=name, generator=generator,
-                        data=data, number_of_fits=number_of_fits,
-                        modelfiles=modelfiles, top_n=top_n)
-    
-    learner.verbose = old_verbose    
+        else:
+            raise ValueError("type_of_search should be in ('grid', 'random').")
+
+        config, df = _search(learner=learner, name=name, generator=generator,
+                            data=data, number_of_fits=number_of_fits,
+                            modelfiles=modelfiles, top_n=top_n)    
     return config, df
 
 
@@ -165,48 +170,37 @@ def _search(learner, name, generator, data, number_of_fits, modelfiles, top_n):
     scores = []
     params_scores = [] 
     
-    for param in tqdm_notebook(generator, desc=name, total=number_of_fits):        
-        param.update(_train_eval(name, learner, data, param))
+    n_models = len(modelfiles)-1
+    
+    for param in tqdm(generator, desc=name, total=number_of_fits):        
+        
+        param.update(train_eval(name, learner, data, param))
         params_scores.append(param) 
         
-        # If no validation data, use train data to sort
         this_score = param['val_score'] 
         if np.isnan(this_score):
             this_score = param['train_score']
-            
-        rank = 0
-        for score in scores:
-            if score>=this_score: 
-                rank += 1
                 
-        # If modelfiles is an empty list the below expression
-        # never evaluates to True, and no files are saved.
-        if rank<len(modelfiles):
-            _save_model(learner.clf[name].estimator, modelfiles[rank])    
-        scores.insert(rank, this_score)            
+        if n_models > -1:       
+            rank = 0
+            for score in scores:
+                if score >= this_score: 
+                    rank += 1             
+            
+            if rank < n_models:
+                files = list(range(rank, n_models))
+                for _rank in reversed(files):                    
+                    
+                    src, dest = (modelfiles[_rank], 
+                                 modelfiles[_rank+1])                                        
+                    
+                    if os.path.exists(src):                        
+                        if os.path.exists(dest):
+                            os.remove(dest)                        
+                        os.rename(src, dest)
+                
+                scores.insert(rank, this_score)
+                save_model(learner.clf[name].estimator, 
+                           modelfiles[rank]) 
     
-    return _get_result(params_scores, top_n)
-
-
-def _get_result(params_scores, top_n):
-    
-    cols = ['train_loss', 'val_loss', 
-            'train_score', 'val_score']
-    
-    df = (pd.DataFrame
-          .from_dict(params_scores)
-          .sort_values(['val_loss', 'val_score', 'train_loss', 'train_score'], 
-                       ascending=[True, False, True, False]))  
-    
-    df = df[[c for c in df.columns 
-             if not c in cols]+cols]
-    
-    config = []
-    d = df.T.to_dict()
-    for i in range(top_n):
-        conf = d[df.index[i]].copy()
-        for key in cols: del conf[key]
-        config.append(conf)
-        del conf
-        
-    return config, df
+    return get_result(params_scores, top_n)
