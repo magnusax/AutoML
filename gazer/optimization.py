@@ -182,23 +182,13 @@ def _search(learner, name, generator, data, number_of_fits, modelfiles, top_n):
             this_score = param['train_score']
                 
         if n_models > -1:       
-            rank = 0
-            for score in scores:
-                if score >= this_score: 
-                    rank += 1             
-            
+            rank = len(np.where(np.array(scores) >= this_score)[0])            
             if rank < n_models:
-                files = list(range(rank, n_models))
-                for _rank in reversed(files):                    
-                    
+                for _rank in reversed(range(rank, n_models)):                                        
                     src, dest = (modelfiles[_rank], 
-                                 modelfiles[_rank+1])                                        
-                    
-                    if os.path.exists(src):                        
-                        if os.path.exists(dest):
-                            os.remove(dest)                        
-                        os.rename(src, dest)
-                
+                                 modelfiles[_rank+1])                                                                   
+                    if os.path.exists(src):                                                
+                        os.replace(src, dest)                
                 scores.insert(rank, this_score)
                 save_model(learner.clf[name].estimator, 
                            modelfiles[rank]) 
