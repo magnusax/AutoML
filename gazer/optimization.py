@@ -172,14 +172,14 @@ def _search(learner, name, generator, data, number_of_fits, modelfiles, top_n):
     
     n_models = len(modelfiles)-1
     
-    for param in tqdm(generator, desc=name, total=number_of_fits):        
+    for params in tqdm(generator, desc=name, total=number_of_fits):        
         
-        param.update(train_eval(name, learner, data, param))
+        params.update(train_eval(name, learner, data, params))
         params_scores.append(param) 
         
-        this_score = param['val_score'] 
+        this_score = params['val_score'] 
         if np.isnan(this_score):
-            this_score = param['train_score']
+            this_score = params['train_score']
                 
         if n_models > -1:       
             rank = len(np.where(np.array(scores) >= this_score)[0])            

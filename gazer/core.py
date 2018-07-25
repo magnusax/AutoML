@@ -513,61 +513,86 @@ class GazerMetaLearner():
                 for i, param in enumerate(clf.cv_params)]
 
 
-    def bayes_optimize(self, X, y, n_calls=50, scoring='accuracy', greater_is_better=True, cv=10, n_jobs=1, random_state=None):
+    def bayes_optimize(self, X, y, n_calls=50, scoring='accuracy', 
+                       greater_is_better=True, cv=10, n_jobs=1, random_state=None):
         """        
-        Use package 'scikit-optimize' >=0.3 in order to do Bayesian optimization instead of random grid search.
-        Package URL: https://github.com/scikit-optimize/scikit-optimize/        
-        """           
-
-        # cv_params is a list with >= 1 dicts, so we have to iterate over them
-        # and add each to the repository of space
-        skopt_spaces = skopt_space_mapping([
-            (name, params) for name, clf in self.clf.items() for params in clf.cv_params])  
+        Use package 'scikit-optimize' (github.com/scikit-optimize/scikit-optimize) 
+        to do Bayesian Optimization instead of random grid search.
         
-        results = []        
-        for name, classifier in self.clf.items():       
+        Parameters:
+        ------------
+            X : matrix-like, 2d-array
+                Should be a pandas dataframe or a numpy array.
+                - This data is split into folds using a CV procedure
+                  (cross_val_score)
             
-            # Define search space (could get more than a single hit here), so len(space)>=1 (potentially)
-            spaces = [(name_, skopt_space_) 
-                      for name_, skopt_space_ in skopt_spaces if name_ == name]                        
-            
-            if len(spaces) == 0:
-                raise ValueError("Space is undefined [name = %s] (%s)" % (name, space))
-            
-            for space in spaces:
+            y : numpy array, iterable
+                Training labels/ground truth.
                 
-                if not (isinstance(space, tuple) and isinstance(space[1], dict)):
-                    raise ValueError("'space' should contain (str, dict)-tuples, got: %s" % str(spaces))    
-                if len(space[1]) == 0:
-                    warnings.warn("%s:\tempty parameter dictionary (continue)" % name)
-                    continue
-                          
-                param_names = [ n for n, _ in space[1].items() ]
-                dim_space = [ dim for _, dim in space[1].items() ]
+            n_calls : int, default: 50
+                Number of iterations/function evaluations allowed
+                in search procedure.
+                
+            scoring : str, default: 'accuracy'
+                Metric to use when optimizing the classifier.
+                
+            greater_is_better : bool, default: True
+                If True, then a higher metric score is better, and
+                if set to False, a lower score equals better classifier.
+                
+            cv : int, or callable, default: 10
+                Number of CV folds (if integer), or data splitter which
+                generates train+val splits/folds.
+                
+            n_jobs : int, default: 1
+                Used by cross_val_score to speed up function evaluation.
+                
+            random_state : None, int, or callable, default: None
+                Used to set the random state, for reproducibility.
+                
+        Returns:
+        ---------
+            'opts' : dict of (params, abs(best_score)) tuples: {name: (params, score),..}
             
-                # Define objective function (it will have access to externally defined variables in 
-                # the calling method namespace
-                def _objective(params):
-                    param_ = {param_name:param for param_name, param in zip(param_names, params)}
-                    classifier.estimator.set_params(**param_) 
-                    score = np.mean(cross_val_score(classifier.estimator, X, y, cv=cv, scoring=scoring, n_jobs=n_jobs))
-                    if greater_is_better:
-                        return -score
-                    else:
-                        return score
+        """           
+        skopt_spaces = [(name, params) for name, clf in self.clf.items() 
+                        for params in clf.cv_params]      
+        skopt_spaces = skopt_space_mapping(skopt_spaces)  
+        
+        opts = {} 
+        for name, clf in self.clf.items():                   
+            
+            spaces = [_space for _name, _space in skopt_spaces if _name==name]                                    
+            if not spaces:
+                raise ValueError("{}: space undefined.".format(name))
+            
+            for space in spaces:                
+                if not space:
+                    warnings.warn("{}: empty space dict (continue).".format(name))
+                    continue                          
+                names, parspace = space.keys(), space.values()
+            
+                def feval(params):
+                    pars = {_name: param for _name, param in zip(names, params)}
+                    clf.estimator.set_params(**pars) 
+                    score = np.mean(cross_val_score(clf.estimator, X, y, 
+                                                    cv = cv, 
+                                                    scoring = scoring, 
+                                                    n_jobs = n_jobs))
+                    return -score if greater_is_better else score
                 
                 with warnings.catch_warnings():
                     warnings.simplefilter('ignore')
                     try:
-                        res_gp = gp_minimize(_objective, dim_space, n_calls=n_calls, random_state=random_state)  
+                        res_gp = gp_minimize(feval, parspace, 
+                                             n_calls = n_calls, 
+                                             random_state = random_state)  
                     except:
-                        warnings.warn("Optimization failed. Info: %s" % sys.exc_info()[1])
+                        warnings.warn("Optimization failed: {}".format(sys.exc_info()[1]))
                         continue
                         
-                # Classifier with optimized parameters
-                best_params = {k:v for k,v in zip(param_names, res_gp.x)}                
-                results.append({name:(best_params, res_gp.fun)})                        
+                opts[name] = [{k:v for k, v in zip(names, res_gp.x)}, abs(res_gp.fun)]                       
+                
                 if self.verbose > 0:
-                    print("Name: %s \tBest score: %.4f" % (name, -res_gp.fun if greater_is_better else res_gp.fun))        
-        
-        return results
+                    print("{} \t abs(best_score): {:.4f}".format(name, abs(res_gp.fun)))                
+        return opts
