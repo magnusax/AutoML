@@ -175,7 +175,7 @@ def _search(learner, name, generator, data, number_of_fits, modelfiles, top_n):
     for params in tqdm(generator, desc=name, total=number_of_fits):        
         
         params.update(train_eval(name, learner, data, params))
-        params_scores.append(param) 
+        params_scores.append(params) 
         
         this_score = params['val_score'] 
         if np.isnan(this_score):
