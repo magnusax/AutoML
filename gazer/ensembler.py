@@ -529,9 +529,9 @@ class GazerMetaEnsembler(object):
         """        
         wts = np.zeros(len(ensemble))
         preds = np.zeros((len(y), len(ensemble)), dtype=int)        
-        for j, (idx, _, pred) in enumerate(ensemble):
-            wts[j] = float(weights[idx])
-            preds[:, j] = pred
+        for col, (idx, _, pred) in enumerate(ensemble):
+            wts[col] = weights[idx]
+            preds[:, col] = pred
             
         return self._weighted_vote_score(wts, preds, y, scorer)
 

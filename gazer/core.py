@@ -131,7 +131,7 @@ class GazerMetaLearner():
         return list(self.clf.keys())
     
     @property
-    def num_estimators(self):
+    def n_algorithms(self):
         return len(self.names)
     
     
@@ -234,16 +234,14 @@ class GazerMetaLearner():
     def _add_algorithm(self, module_name, algorithm_name):                     
         """ Import classifier algorithms """
                     
-        path_to_module = ".".join((__package__, "classifiers", module_name))                
-        try:           
+        path_to_module = ".".join((__package__, "classifiers", module_name))                           
+        try:
             module = import_module(path_to_module, package=True)
-        except:            
-            try:
-                module = import_module(path_to_module, package=False)
-            except ImportError: 
-                warnings.warn("Could not import {}".format(module_name), RuntimeWarning)
-                print(sys.exc_info()[1])
-                return None
+        except ImportError: 
+            warnings.warn("Could not import {}\n{}"
+                          .format(module_name, sys.exc_info()[1]), 
+                          RuntimeWarning)
+            return None
         
         algorithm = getattr(module, algorithm_name)        
         
@@ -467,7 +465,10 @@ class GazerMetaLearner():
         --------
             List containing (classifier name, most optimized classifier) tuples       
         
-        """        
+        """  
+        getkey = (lambda name, idx: name if idx<2 
+                  else name+str(idx-1))
+        
         def search(clf, params):        
                         
             if not params:
@@ -477,14 +478,12 @@ class GazerMetaLearner():
             if sample_params and not get_params:
                 kwargs = {'num_params': 
                               np.random.randint(min_params, len(pars)), 
-                          'mode': 'random'}
-            
+                          'mode': 'random'}            
             elif get_params and not sample_params and clf.cv_params_to_tune:
                 kwargs = {'keys': clf.cv_params_to_tune, 
                           'mode': 'select'}    
             else:
-                kwargs = {}
-            
+                kwargs = {}            
             if kwargs:
                 pars = clf.set_tune_params(pars, **kwargs)   
             niter = min(n_iter, clf.max_n_iter)        
@@ -499,15 +498,15 @@ class GazerMetaLearner():
             except:
                 return (clf.estimator.fit(X, y), None)
             else:
-                return (randsearch.best_estimator_, randsearch.best_score_)            
+                return (randsearch.best_estimator_, randsearch.best_score_)
             
             finally:
                 if self.verbose > 0 and fitted:
                     delta = (time.time()-start)/60.0
-                    print(">>> Search time: {:.1f} (min) \n>>> Best score: {:.4f}"
-                          .format(delta, randsearch.best_score_), end='\n\n') 
-                    
-        return {"{}_{}".format(name, idx): search(clf, params) for name, clf in self.clf.items() 
+                    print("==== {} ==== \n>>> Search time: {:.1f} (min) \n>>> Best score: {:.4f}"
+                          .format(clf.name, delta, randsearch.best_score_), end='\n\n') 
+                
+        return {getkey(name, idx): search(clf, params) for name, clf in self.clf.items() 
                 for idx, params in enumerate(clf.cv_params, start=1)}
 
 
