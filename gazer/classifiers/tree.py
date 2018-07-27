@@ -1,6 +1,7 @@
 from sklearn.tree import DecisionTreeClassifier
-from scipy.stats import randint, uniform
+from scipy.stats import randint
 from ..base import BaseClassifier
+from ..utils.stats import _uniform
 
 
 class MetaDecisionTreeClassifier(BaseClassifier):
@@ -22,37 +23,47 @@ class MetaDecisionTreeClassifier(BaseClassifier):
         self.init_params['class_weight'] = class_weight
         self.init_params['random_state'] = random_state
 
-        # Initialize algorithm and make it available
         self.estimator = self._get_clf()        
-        # Initialize dictionary with trainable parameters
         self.cv_params = self._set_cv_params()
-        # Initialize list which can be populated with params to tune 
         self.cv_params_to_tune = []
 
         
     def _get_clf(self):
         return DecisionTreeClassifier(**self.init_params)    
     
+    
     def get_info(self):
         return {'does_classification': True,
                 'does_multiclass': True,
-                'does_regression': False, 
-                'predict_probas': 
-                    hasattr(self.estimator, 'predict_proba')}
+                'does_regression': False,
+                'external': False,
+                'predict_probas': hasattr(self.estimator, 'predict_proba')}
     
-    def adjust_param(self, d):
-         return super().adjust_params(d)
     
-    def set_tune_params(self, params, num_params=1, mode='random', keys=list()):
-        return super().set_tune_params(params, num_params, mode, keys) 
+    def set_params(self, params):
+         return super().set_params(params)
+    
+    
+    def set_tune_params(self, params, n_params, mode, keys):
+        return super().set_tune_params(params, n_params, mode, keys) 
+    
+    
+    def update_cv_params(self, params):
+        """ Update parameter dictionary. """
+        assert self.cv_params
+        return super().update_cv_params(params)  
+    
     
     def _set_cv_params(self):
         """ Dictionary containing all trainable parameters.      
         """
-        return [{ 'criterion': ['entropy', 'gini'],
-                  'max_depth': randint(2, 51),
-                  'min_samples_split': randint(2, 201),
-                  'min_samples_leaf': randint(2, 201),
-                  'max_features': uniform(0.25, 0.95),
-                  'class_weight': ['balanced', None] }]
+        params = { 
+            'criterion': ('entropy', 'gini'),
+            'max_depth': randint(1, 50),
+            'min_samples_split': randint(2, 200),
+            'min_samples_leaf': randint(2, 200),
+            'max_features': _uniform(0.25, 0.95),
+            'class_weight': ('balanced', None) }
+        return [params]
+    
                 

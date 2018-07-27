@@ -20,7 +20,8 @@ def implemented(add_network=True, add_xgboost=True):
 
     algorithms = [    
         # Scikit-learn algorithms
-        ('adaboost', 'MetaAdaBoostClassifier'), 
+        ('adaboost', 'MetaAdaBoostClassifier'),
+        ('gbm', 'MetaGradBoostingClassifier'),
         ('logistic_regression', 'MetaLogisticRegressionClassifier'),
         ('nearest_neighbors', 'MetaKNearestNeighborClassifier'), 
         ('naive_bayes', 'MetaBernoulliNBayesClassifier'),

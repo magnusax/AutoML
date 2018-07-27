@@ -2,22 +2,23 @@
 Module implements functions and classes to help with bagging of predictions.
 
 """
+import warnings
 import numpy as np
+from sklearn.base import clone
+from sklearn.pipeline import Pipeline
 from sklearn.exceptions import NotFittedError
 
 
 class RandomEnsembler:
     
-    def __init__(self, nc_estimator, fitted_params, n_ensembles=5, seed=None):
+    def __init__(self, estimator, fitted_params, n_ensembles=5, seed=None):
         """
         Convenient way to average predictions from multiple instances of a single classifier 
-        using the best parameters found from some type of hyperparameter search.
+        using the best parameters found in hyperparameter search.
         
         Parameters:
         -----------
-            nc_estimator : class template that implements random_state
-                A class of scikit-learn estimator without closure (hence 'nc'=no closure)
-                e.g., 'RandomForestClassifier' and *not* 'RandomForestClassifier()'
+            estimator : class that implements random_state
             
             fitted_params : dict
                 Dictionary, a set of (preferably optimized) parameters to be fed to estimator.
@@ -26,17 +27,16 @@ class RandomEnsembler:
                 Control number of instances to ensemble over.
                 
         """
-        assert hasattr(nc_estimator(), 'random_state')
-        self.nc_estimator = nc_estimator
         
         assert isinstance(fitted_params, dict)
         self.fitted_params = fitted_params        
-        
+        self.estimator = estimator
+
         self.n_ensembles = int(n_ensembles)        
         if seed is not None:
             np.random.seed(seed)
         
-        self.rargs = {'low': 1, 'high': 1e10}           
+        self.rargs = {'low': 1, 'high': 1e8}           
         self.models = []
     
     
@@ -63,12 +63,27 @@ class RandomEnsembler:
             y : array-like, shape (n_samples,). 
                 Training labels.
             
-            **kwargs : other parameters to input to `fit` method if applicable.
+            **kwargs : other parameters to input to `fit` method 
+            if applicable.
+            
         """
+        if isinstance(self.estimator, Pipeline):
+            name, _ = self.estimator.steps[-1] 
+            key = '%s__random_state' % name
+        else:
+            key = 'random_state'
+        
         # Generate and train new model for each seed
+        
+        # -----------------------------------
+        # NB: Use joblib to parallelize this
+        # part!
+        # -----------------------------------
+        
         for _ in range(self.n_ensembles):           
-            model = self.nc_estimator(
-                random_state = np.random.randint(**self.rargs))
+            random_state = np.random.randint(**self.rargs)
+            model = clone(self.estimator)
+            self.fitted_params.update({key: random_state})
             model.set_params(**self.fitted_params)
             model.fit(X, y, **kwargs)
             self.models.append(model)
@@ -86,15 +101,14 @@ class RandomEnsembler:
         
         Parameters:
         -----------
-            X : matrix-like, shape (n_samples_test, n_features). 
+            X : matrix-like, shape (n_samples, n_features). 
                 Test data to predict on.
                 
         Returns:
-        -----------
-            ensembled_preds : numpy-array, shape (n_samples_test,). 
-                Majority ensembled predictions which usually beat 
-                the single best classifier predictions trained on 
-                the same data.
+        --------
+            predicted_class : numpy-array, shape (n_samples,). 
+                Majority ensembled predictions that often 
+                represent an improvement over single classifier output.
                 
         """    
         if not self.is_fitted:
@@ -133,7 +147,7 @@ class RandomEnsembler:
                 transforms: (n_samples, n_classes) --> (n_samples,)
                 
         Returns:
-        -----------
+        --------
             probas : numpy-array, shape (n_samples, n_classes)
                 Numerically averaged probability predictions for each class which usually 
                 beat the single best classifier predictions trained on the same data.
@@ -144,8 +158,9 @@ class RandomEnsembler:
         if not self.is_fitted:
             raise NotFittedError('Call `fit` first.')
             
-        if not hasattr(self.nc_estimator(), 'predict_proba'):
-            raise AttributeError('Estimator should implement `predict_proba`.')
+        if not hasattr(self.estimator, 'predict_proba'):
+            warnings.warn('Estimator should implement `predict_proba`.')
+            return self.predict(X)
         
         preds = np.ndarray((X.shape[0], len(self.classes), self.n_ensembles), dtype=float)
         for i, model in enumerate(self.models):

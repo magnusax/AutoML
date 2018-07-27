@@ -466,27 +466,27 @@ class GazerMetaLearner():
             List containing (classifier name, most optimized classifier) tuples       
         
         """  
-        getkey = (lambda name, idx: name if idx<2 
-                  else name+str(idx-1))
+        get_key = (lambda name, i: name if i<2 else name+str(i-1))
         
         def search(clf, params):        
                         
             if not params:
+                print(clf.name, 'No params')
                 return (clf.estimator.fit(X, y), None)
-            pars = params.copy()                       
             
-            if sample_params and not get_params:
+            pars = params.copy()                       
+            kwargs = {}
+            if sample_params and (not get_params):
                 kwargs = {'num_params': 
                               np.random.randint(min_params, len(pars)), 
                           'mode': 'random'}            
-            elif get_params and not sample_params and clf.cv_params_to_tune:
+            elif get_params and (not sample_params) and clf.cv_params_to_tune:
                 kwargs = {'keys': clf.cv_params_to_tune, 
-                          'mode': 'select'}    
-            else:
-                kwargs = {}            
-            if kwargs:
-                pars = clf.set_tune_params(pars, **kwargs)   
+                          'mode': 'select'}                             
+            
+            pars = clf.set_tune_params(pars, **kwargs) if kwargs else pars   
             niter = min(n_iter, clf.max_n_iter)        
+            
             randsearch = RandomizedSearchCV(clf.estimator, pars, 
                                             n_iter=niter, scoring=scoring, cv=cv, 
                                             n_jobs=n_jobs, random_state=random_state)            
@@ -496,9 +496,12 @@ class GazerMetaLearner():
                 randsearch.fit(X, y)
                 fitted = True
             except:
+                print(clf.name, 'failed fit')
+                print('error:', sys.exc_info()[1])
                 return (clf.estimator.fit(X, y), None)
             else:
-                return (randsearch.best_estimator_, randsearch.best_score_)
+                print(clf.name, 'success')
+                return (randsearch, randsearch.best_score_)
             
             finally:
                 if self.verbose > 0 and fitted:
@@ -506,8 +509,9 @@ class GazerMetaLearner():
                     print("==== {} ==== \n>>> Search time: {:.1f} (min) \n>>> Best score: {:.4f}"
                           .format(clf.name, delta, randsearch.best_score_), end='\n\n') 
                 
-        return {getkey(name, idx): search(clf, params) for name, clf in self.clf.items() 
-                for idx, params in enumerate(clf.cv_params, start=1)}
+        return {get_key(name, idx): search(clf, params) 
+                for name, clf in self.clf.items() for idx, params 
+                in enumerate(clf.cv_params, start=1)}
 
 
     def bayes_optimize(self, X, y, n_calls=50, scoring='accuracy', 
@@ -561,11 +565,11 @@ class GazerMetaLearner():
             
             spaces = [_space for _name, _space in skopt_spaces if _name==name]                                    
             if not spaces:
-                raise ValueError("{}: space undefined.".format(name))
+                raise ValueError("{}: spaces undefined.".format(name))
             
             for space in spaces:                
                 if not space:
-                    warnings.warn("{}: empty space dict (continue).".format(name))
+                    warnings.warn("{}: empty space (continue).".format(name))
                     continue                          
                 names, parspace = space.keys(), space.values()
             
