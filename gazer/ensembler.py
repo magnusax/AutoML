@@ -71,35 +71,82 @@ class GazerMetaEnsembler(object):
             Should specify input data dimensions according to
             (X.shape[0], X.shape[1]) where `X` is the canonical data-matrix
             with shape (n_samples, n_features)
+        
+        models : optional, dict, default: None
+            Only used when instantiating from a pre-existing state. 
+            Activated by from_state = True (see below).
+            
+          - Note: automatically computed by classmethod 'from_files'
+            and passed into the constructor. You should never set 
+            this variable manually: use 'GazerMetaEnsembler.from_state()'
+            and pass the top-directory wherein your model files are located.
+            
+        from_state : bool, default: False
+            Instantiate an ensembler from pre-existing files when True.
+            The default behavior is to build a new ensemble from scratch
+            by calling the internal '_build()' method.
     
+    Notes: 
+    ------
+        
+        >>> ensembler = GazerMetaEnsembler.from_state(files)
+        # No need to perform fitting of models at this point
+        # since we are loading from a state where this is taken care of.
+        
+        >>> ensembler.hillclimb()        
+        # Instead, dive straight into hillclimbing: make sure that there is consistency
+        # between the data you have previously trained on, and the validation set you
+        # pass into the hillclimbing method.
+
+        
     """
-    def __init__(self, learner, data_shape):
+    def __init__(self, learner, data_shape, models=None, from_state=False):
 
-        if not isinstance(data_shape, tuple) and len(data_shape)==2:
-            raise TypeError("data_shape must be a 2-tuple.")
+        self.learner = learner            
+        if learner is not None:
+            if not isinstance(learner, GazerMetaLearner().__class__):
+                raise TypeError("learner must be a GazerMetaLearner.")
+        
         self.data_shape = data_shape
-        
-        if not isinstance(learner, type(GazerMetaLearner())):
-            raise TypeError("learner must be a GazerMetaLearner instance.")
-        self.learner = learner
+        if data_shape is not None:
+            if not isinstance(data_shape, tuple) and len(data_shape)==2:
+                raise TypeError("data_shape must be a 2-tuple.")
+            
+        # These are set according to passed state variable
+        self.train_phase = True
+        if not from_state:
+            self.ensemble = self._build()
+            self.models = {}        
+        elif from_state:
+            self.ensemble = None
+            self.models = models    
+            self.train_phase = False
+            
+    @classmethod
+    def from_state(cls, topdir):        
+        kwargs = {'learner': None, 'data_shape': None, 'from_state': True}
+        kwargs.update({'models': fetch_state_dict(topdir)})        
+        return cls(**kwargs)
+
     
-        # This object is later used to orchestrate 
-        # hillclimbing on the validation dataset
-        self.orchestrator = {}
+    @staticmethod
+    def fetch_state_dict(topdir):
+        d = {}
+        assert os.path.isdir(topdir)
+        search_tree = os.walk(topdir)
+        _ = next(search_tree)
         
-        # Build ensemble dictionary
-        self.ensemble = self._build()
-
-        
-    def summary(self):
-        """ Summarize expected number of fits (individual and total). """
-        total = 0
-        for k, v in self.ensemble.items():
-            total += len(v)
-            print("Algorithm: {} \tFits: {}".format(k, len(v)))
-        print("Expected total number of fits = {}".format(total))
- 
-
+        for dirpath, dirnames, dirfiles in search_tree:
+            if dirnames:
+                raise Exception("Tree is too deep. Remove subdirs: {}".format(dirnames))
+            if dirfiles:
+                key = os.path.basename(dirpath)
+                d[key] = dirfiles
+            else:
+                warnings.warn("Empty dir: {} (skipping)".format(dirpath))
+        return d
+    
+    
     def _build(self):
         """
         Build ensemble from base learners contained in the `learner` object.
@@ -248,7 +295,7 @@ class GazerMetaEnsembler(object):
                 raise Exception("Could not create folder {}."
                                 .format(save_dir))
 
-        self.orchestrator = self._fit(X=X, y=y, save_dir=save_dir, 
+        self.models = self._fit(X=X, y=y, save_dir=save_dir, 
                                       scorer=get_scorer(scoring), 
                                       n_jobs=n_jobs, verbose=verbose, 
                                       **kwargs)
@@ -358,7 +405,7 @@ class GazerMetaEnsembler(object):
         """
         # Collect and order natives    
         files = []
-        for name, fs in self.orchestrator.items():
+        for name, fs in self.models.items():
             fs = [(name, path) for path, _ in fs]
             files += fs 
         return files
