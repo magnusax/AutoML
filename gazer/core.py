@@ -239,15 +239,9 @@ class GazerMetaLearner():
         try:
             module = import_module(path_to_module, package=True)
         except ImportError:
-            print('failed 1')
             try:
                 module = import_module(path_to_module, package=False)
-                print('success 2')
             except:
-                print('failed 2')
-                print('='*50)
-                print(sys.exc_info())
-                print('='*50)
                 warnings.warn("Could not import {}\n{}"
                               .format(module_name, sys.exc_info()[1]), 
                                RuntimeWarning)
