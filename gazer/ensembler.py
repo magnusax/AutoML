@@ -3,9 +3,8 @@ from __future__ import print_function
 import os, sys, time, copy, glob, random, warnings
 
 import numpy as np
-from scipy.stats import uniform
 from sklearn.externals import joblib 
-from tqdm import tqdm_notebook
+from tqdm import tqdm_notebook as tqdm
 
 from .metrics import get_scorer
 from .sampling import Loguniform
@@ -76,7 +75,7 @@ class GazerMetaEnsembler(object):
             Only used when instantiating from a pre-existing state. 
             Activated by from_state = True (see below).
             
-          - Note: automatically computed by classmethod 'from_files'
+          - Note: automatically computed by classmethod 'from_state'
             and passed into the constructor. You should never set 
             this variable manually: use 'GazerMetaEnsembler.from_state()'
             and pass the top-directory wherein your model files are located.
@@ -113,19 +112,20 @@ class GazerMetaEnsembler(object):
                 raise TypeError("data_shape must be a 2-tuple.")
             
         # These are set according to passed state variable
-        self.train_phase = True
         if not from_state:
             self.ensemble = self._build()
-            self.models = {}        
+            self.models = {}   
+            self.allow_train = True
         elif from_state:
             self.ensemble = None
             self.models = models    
-            self.train_phase = False
-            
+            self.allow_train = False
+    
+    
     @classmethod
     def from_state(cls, topdir):        
         kwargs = {'learner': None, 'data_shape': None, 'from_state': True}
-        kwargs.update({'models': fetch_state_dict(topdir)})        
+        kwargs.update({'models': cls.fetch_state_dict(topdir)})        
         return cls(**kwargs)
 
     
@@ -148,38 +148,20 @@ class GazerMetaEnsembler(object):
     
     
     def _build(self):
-        """
-        Build ensemble from base learners contained in the `learner` object.
-
-        Parameters:
-        -----------
-            learner : object
-                instance of GazerMetaLearner class
-
-            X : matrix-like
-                input 2D matrix of shape (n_samples, n_features)
-                We need some meta data to be able to make sensible choices
-                on parameters.
-
-        Returns:
-        ---------
-            Dictionary : (algorithm[str]: classifiers[list]) 
-            Dictionary containing name keys with corresponding values being
-            a list of possible learners with varying settings of hyperparameters.
-        
+        """ Build ensemble from base learners 
+        contained in the `learner` object.        
         """
         lib = library_config(self.learner.names, *self.data_shape)        
         build = {}
-        for name, grid in lib:
-            
-            # Check metadata: can we generate templates or not?
+        for name, grid in lib:            
+            # Check metadata to determine if external
             info = self.learner.clf[name].get_info()
-            external_api = info.get('external', False)    
+            is_external = info.get('external', False)    
             
-            # Here we take care of algorithms from external packages
-            # which we cannot follow the scikit-learn api 
-            if external_api:                
-                if name == 'neuralnet':
+            # Here we take care of external packages with their
+            # own api 
+            if is_external:                
+                if name=='neuralnet':
                     build[name] = grid            
             else:
                 build[name] = self._gen_templates(name, grid)            
@@ -187,8 +169,8 @@ class GazerMetaEnsembler(object):
     
     
     def _gen_templates(self, name, params):    
-        """ Here we generate estimators to later fit """
-        
+        """ Here we generate estimators to later fit. 
+        """
         clf = self.learner._get_algorithm(name)
         estimators = []
         for param in params:
@@ -210,23 +192,19 @@ class GazerMetaEnsembler(object):
 
     
     def _gen_grid(self, grid):
-        """ Generate a config grid. """
+        """ Generate a config grid. 
+        """
         method = grid.get('method', None)
         assert method in ('take', 'sample') 
-
         if method=='take':
             return grid['values']
-
         elif method=='sample':  
             category = grid.get('category', None)        
-            assert category in ('discrete', 'continuous')
-            
+            assert category in ('discrete', 'continuous')            
             low, high, points, prior = (
                 grid['low'], grid['high'], grid['numval'], grid['prior'])
-
             if category=='discrete':
                 raise NotImplementedError('Discrete sampling not implemented yet.')                   
-
             elif category=='continuous':                                  
                 if prior=='loguniform':
                     return Loguniform(low=low, high=high, size=points).range()
@@ -240,12 +218,14 @@ class GazerMetaEnsembler(object):
         
         - Models are pickled under the `save_dir`
           folder (each algorithm will have a separate folder in the tree)
+        
         - If directory does not exist, we attempt to create it. 
 
+
         Parameters:
-        ------------
+        -----------
             X : matrix-like
-                2D matrix of shape (n_samples, n_columns)
+                2D matrix of shape (n_samples, n_features)
 
             y : array-like
                 Label vector of shape (n_samples,)
@@ -277,35 +257,30 @@ class GazerMetaEnsembler(object):
                     - The change takes place through estimator.set_params()
 
         Returns:
-        ---------
+        --------
             Dictionary with paths to fitted and pickled learners, as well as scores on 
             training data. Note that joblib is used to pickle the data.
 
-        """         
-        if (save_dir is None or len(save_dir)==0):
-            raise Exception("Please specify a valid directory.")
-
+        """
+        if not self.allow_train:
+            raise Exception("Loaded from existing state: training not possible. "+\
+                "Try calling .hillclimb(X, y,..) method instead.")            
+        if not save_dir:
+            raise Exception("'{}' is not a valid directory.".format(save_dir))
         if os.path.exists(save_dir):
-            warnings.warn("Warning: overwriting existing folder {}."
-                          .format(save_dir))
+            warnings.warn("Warning: overwriting existing folder {}.".format(save_dir))
         else:
-            try:
-                os.makedirs(save_dir)
-            except:
-                raise Exception("Could not create folder {}."
-                                .format(save_dir))
-
+            os.makedirs(save_dir)
+            
         self.models = self._fit(X=X, y=y, save_dir=save_dir, 
                                       scorer=get_scorer(scoring), 
                                       n_jobs=n_jobs, verbose=verbose, 
                                       **kwargs)
-        return
     
-        
     def _fit(self, X, y, save_dir, scorer, n_jobs, verbose, **kwargs):
-        """ Implement the fitting """
-        
-        # Keep track of model and scores
+        """ Implement fitting. 
+        """
+        # Keep track of model and score
         # All relevant data is available in `history`
         history = {}
                
@@ -313,51 +288,46 @@ class GazerMetaEnsembler(object):
         for name in names:
             os.makedirs(os.path.join(save_dir, name))        
         
-        # Ttrain the network first, if present
-        _name = 'neuralnet'
-        if _name in names:
-            
-            args, param_grid = self.ensemble.pop(_name)            
-            _modelfiles = [os.path.join(save_dir, _name, file) 
-                           for file in args['modelfiles']]
-            _n_iter = args['n_iter']            
-            _data={'train': (X, y), 'val': None}  
-            # Do parameter search (random). Note: no validation data, so sort by train scores
-            _, df = param_search(self.learner, param_grid, data=_data, type_of_search='random', 
-                 n_iter=_n_iter, name=_name, modelfiles=_modelfiles)
-            
-            history[_name] = zip(_modelfiles, df.head(len(_modelfiles))['train_score'].values)
+        name = 'neuralnet'
+        if name in names:            
+            args, param_grid = self.ensemble.pop(name)            
+            n_iter = args['n_iter']            
+            data = {'train': (X, y), 'val': None} 
+            modelfiles = [os.path.join(save_dir, name, file) for file in args['modelfiles']]            
+            _, df = param_search(
+                self.learner, param_grid, 
+                data=data, 
+                type_of_search='random', 
+                n_iter=n_iter, 
+                name=name, 
+                modelfiles=modelfiles)
+            history[name] = zip(modelfiles, df.head(len(modelfiles))['train_score'].values)
         
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            for name, estimators in self.ensemble.items():            
-                
+            for name, estimators in self.ensemble.items():                            
                 path = os.path.join(save_dir, name)
-                kwargs_ = kwargs.get(name, {})                           
-                
+                kwarg = kwargs.get(name, {})                                           
                 if n_jobs != 1:
                     models = joblib.Parallel(n_jobs=n_jobs, verbose=verbose, backend="threading")(
-                        joblib.delayed(single_fit)(estimator, scorer, X, y, path, i, **kwargs_) 
+                        joblib.delayed(single_fit)(estimator, scorer, X, y, path, i, **kwarg) 
                         for i, estimator in enumerate(estimators, start=1))
                 else:
                     models = []
-                    for i, estimator in enumerate(tqdm_notebook(estimators, desc="{}".format(name), ncols=120)):
-                        this_modelfile, this_score = single_fit(estimator, scorer, X, y, path, i, **kwargs_)
-                        models.append((this_modelfile, this_score))
-                    
+                    for i, estimator in enumerate(tqdm(estimators, desc="{}".format(name), ncols=120)):
+                        this_modelfile, this_score = single_fit(estimator, scorer, X, y, path, i, **kwarg)
+                        models.append((this_modelfile, this_score))                   
                 history[name] = sorted(list(models), key=lambda x: -x[1]) 
             
-        # Before returning: purge any failed fits
+        # Purge any failed fits
         for name, models in history.items():
-            history[name] = [(file, score) for file, score 
-                             in models if file is not None]            
+            history[name] = [(name, file) for file, _ in models if file is not None]            
         return history
     
     
     def _add_networks(self, clf, X, y, path):
         """Add to ensemble repository a set of keras neural network
-        models
-        
+        models       
         """
         y_ = clf.y_check(y, verbose=0)
         
@@ -397,20 +367,7 @@ class GazerMetaEnsembler(object):
         # We sort according to loss: lower is better
         return (clf, sorted(models, key=lambda x: x[1]))
    
-    
-    def _prep_output(self):
-        """
-        Internal convenience method. Take object containing fitted algorithms 
-        and scores and return a sorted list of classifiers.            
-        """
-        # Collect and order natives    
-        files = []
-        for name, fs in self.models.items():
-            fs = [(name, path) for path, _ in fs]
-            files += fs 
-        return files
-    
-    
+
     def hillclimb(self, X, y, n_best=0.1, p=0.3, iterations=10, scoring='accuracy', n_jobs=1, verbose=0):
         """
         Perform hillclimbing on the validation data
@@ -444,130 +401,108 @@ class GazerMetaEnsembler(object):
                 - Set verbose = 1 to get info.               
         
         """
-        clfs = self._prep_output()        
-        total = len([c for c,_ in clfs])
-
         if isinstance(n_best, float):
-            grab = int(n_best*total)
+            grab = int(n_best*len(self.models))
         elif isinstance(n_best, int):
             grab = n_best
         else:
             raise TypeError("n_best should be int or float.")
             
-        nets = [(name, path) for name, path in clfs 
-                if (name == 'neuralnet')]    
-        clfs = [(name, path) for name, path in clfs 
-                if (name != 'neuralnet')]        
-        
-        scorer = get_scorer(scoring)
+        nets = [path for name, path in self.models if (name == 'neuralnet')]    
+        clfs = [path for name, path in self.models if (name != 'neuralnet')]                
+        scorer = get_scorer(scoring)        
+        parallel = joblib.Parallel(n_jobs=n_jobs, 
+                                   verbose=verbose, 
+                                   backend="threading")
         
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')      
-            algs = joblib.Parallel(n_jobs=n_jobs, 
-                                   verbose=verbose, 
-                                   backend="threading")(
-                joblib.delayed(_sklearn_score_fitted)(path, X, y, scorer) 
-                for name, path in clfs) if clfs else []
+            sklearn = parallel(joblib.delayed(_sklearn_score_fitted)(path, X, y, scorer) 
+                               for path in clfs) if clfs else []
             time.sleep(1)
-            nalgs = joblib.Parallel(n_jobs=n_jobs, 
-                                    verbose=verbose, 
-                                    backend="threading")(
-                joblib.delayed(_keras_score_fitted)(path, X, y, scorer) 
-                for name, path in nets) if nets else []
-
-        pool = [al for al in algs+nalgs if not al is None]          
-        algs=None; clfs=None; nets=None; nalgs=None        
+            external = parallel(joblib.delayed(_keras_score_fitted)(path, X, y, scorer) 
+                                for path in nets) if nets else []
+        pooled = [clf for clf in sklearn + external if not clf is None]                  
+        del sklearn
+        del external        
         
         if verbose > 0:        
-            print("Single model max validation score = {}"
-                   .format(np.round(max([score for *_, score in pool]), decimals=4)))  
+            max_score = np.round(max([score for *_, score in pooled]), decimals=4)
+            print("Single model max validation score = {}".format(max_score)) 
         
-        pool = [(str(idx), clf, y_pred) for idx, (clf, y_pred, _) 
-                in enumerate(sorted(pool, key=lambda x: -x[2]))]                    
-        ensemble = pool[:grab]        
-    
-        weights = {idx: 0.0 for idx, *_ in pool}    
+        pooled = [(str(idx), clf, y_pred) for idx, (clf, y_pred, _) 
+                  in enumerate(sorted(pooled, key=lambda x: -x[2]))]                            
+        ensemble = pooled[:grab]        
+        weights = {idx: 0.0 for idx, *_ in pooled}    
         for idx, *_ in ensemble:
             weights[idx] = 1.0
         
-        if verbose > 0:
+        if verbose > 0: 
             print("Best model was: {}".format(ensemble[0][1]))                         
     
-        result = []
+        all_ensembles = []
         for _ in range(iterations):
-            # NB: do we wish to control the random seed here? (Reproducibility, etc.)
-            wens = self._hillclimb_loop(X=X, y=y, scorer=scorer, ensemble=ensemble, 
-                                        weights=weights, pool=pool, p=p, verbose=verbose)
-            if wens: result.append(wens)
+            this_ensemble = self._hillclimb_loop(X = X, y = y, scorer = scorer, ensemble = ensemble, 
+                                        weights = weights, pooled = pooled, p = p, verbose = verbose)
+            if this_ensemble: 
+                all_ensembles.append(this_ensemble)
         
         scores = []
         ensembles = []
-        for ensemble in result:
+        for ensemble in all_ensembles:
             scores.append(ensemble[-1])
             ensembles.append(ensemble[:-1])        
-        max_score = max(scores)
         
+        max_score = max(scores)        
         return max_score, ensembles[scores.index(max_score)]
     
     
-    def _hillclimb_loop(self, X, y, scorer, ensemble, weights, pool, p, verbose, seed=None):
-        """ Hillclimb loop. 
-        
-        """      
-        __ensemble__ = ensemble.copy()
-        __weights__ = weights.copy()
-        __curr_score__ = self.score(__ensemble__, __weights__, y, scorer)
-       
-        if verbose > 0:
-            print("Initial ensemble score = {:.5f}".format(__curr_score__))
-        
+    def _hillclimb_loop(self, X, y, scorer, ensemble, weights, pooled, p, verbose, seed=None):
+        """ Execute hillclimb loop.        
+        """ 
+        max_iter = 100
+        val_scores = []
+        best_score = float("-Inf")
         if seed is not None:
-            np.random.seed(seed)           
-        __pool__ = self._sample_algs(p, pool)
-    
-        # In practice we never max out
-        for i in range(1, 100):            
+            np.random.seed(seed)
             
-            if i==1:
-                best_score = float("-Inf")
-                best_idx = -1
-                val_scores = []
-            
-            for alg in __pool__:                
-                idx = alg[0]                
-                ens = __ensemble__.copy()
-                ens.append(alg)                         
-                wts = __weights__.copy()
-                wts[idx] += 1.0
+        hc_weights = weights.copy()
+        hc_ensemble = ensemble.copy()
+        hc_pool = self.sample_algorithms(p, pooled)
+
+        curr_score = self.score(hc_ensemble, hc_weights, y, scorer)      
+        if verbose > 0:
+            print("Initial ensemble score = {:.5f}".format(curr_score))
+                  
+        for i in range(1, max_iter):                                    
+            for algorithm in hc_pool:                
+                idx = algorithm[0]                
+                local_ensemble = hc_ensemble.copy()
+                local_ensemble.append(algorithm)                         
+                local_weights = hc_weights.copy()
+                local_weights[idx] += 1
                 
-                this_score = self.score(ens, wts, y, scorer)            
+                this_score = self.score(local_ensemble, local_weights, y, scorer)            
                 if this_score > best_score:
                     best_idx = idx
                     best_score = this_score
-                    best_alg = [alg]
+                    best_algorithm = [algorithm]
             
-            if best_score <= __curr_score__:
-                print("Could not improve further. Updated score was: {:.5f}"
-                       .format(best_score))
-                break            
+            if best_score <= curr_score:
+                print("Could not improve. Updated score was: {:.5f}".format(best_score))
+                break                        
+            elif best_score > curr_score: 
+                curr_score = best_score
+                hc_weights[best_idx] += 1                
+                if not best_idx in self.get_idx(hc_ensemble):
+                    hc_ensemble += best_algorithm
             
-            elif best_score > __curr_score__: 
-                __curr_score__ = best_score
-                __weights__[best_idx] += 1.0                
-                if not best_idx in self._get_idx(__ensemble__):
-                    __ensemble__ += best_alg
-            
-            val_scores.append((i, __curr_score__))
+            val_scores.append((i, curr_score))
             if verbose > 0:
-                print("Ensemble loop iter: {} \tScore: {:.5f}"
-                      .format(*val_scores[-1]))
+                print("Ensemble loop iter: {} \tScore: {:.5f}".format(*val_scores[-1]))
             
-        weighted_ensemble = [
-            (path_to_model, __weights__[idx]) 
-            for idx, path_to_model, _ in __ensemble__]
-        
+        weighted_ensemble = [(path, hc_weights[idx]) for idx, path, _ in hc_ensemble]        
         weighted_ensemble.append(val_scores[-1][-1])
-        
         return weighted_ensemble
         
         
@@ -578,37 +513,33 @@ class GazerMetaEnsembler(object):
         preds = np.zeros((len(y), len(ensemble)), dtype=int)        
         for col, (idx, _, pred) in enumerate(ensemble):
             wts[col] = weights[idx]
-            preds[:, col] = pred
-            
-        return self._weighted_vote_score(wts, preds, y, scorer)
+            preds[:, col] = pred           
+        return self.weighted_vote_score(wts, preds, y, scorer)
 
     
-    def _weighted_vote_score(self, wts, preds, y, scorer):  
+    def weighted_vote_score(self, weights, preds, y, scorer):  
         """ Score an ensemble of classifiers using weighted voting. 
         """
         classes = np.unique(preds)
-        _classmapper = {}
+        classmapper = {}
         for i, cls in enumerate(classes):
-            _classmapper[i] = cls
-            belief = np.matmul(preds[:,:]==cls, wts)
+            classmapper[i] = cls
+            belief = np.matmul(preds[:,:]==cls, weights)
             weighted = belief if i==0 else np.vstack((weighted, belief))
         predicted_class = np.array(
-            list(map(lambda idx: _classmapper[idx], np.argmax(weighted.T, axis=1))))             
+            list(map(lambda idx: classmapper[idx], np.argmax(weighted.T, axis=1))))             
         return scorer(predicted_class, y)
     
     
-    def _sample_algs(self, p, pool):        
-        _idxmapper = {idx: (idx, clf, pr) for idx, clf, pr in pool}               
+    def sample_algorithms(self, p, pool):        
+        idxmapper = {idx: (idx, clf, pr) for idx, clf, pr in pool}               
         if isinstance(p, float):
             size = int(p * float(len(pool)))
         elif isinstance(p, int):
             size = p        
-        return list(map(lambda idx: _idxmapper[idx], np.random.choice(self._get_idx(pool), 
-                                                               size=size, replace=False)))
-        #return [idxs_mapper[idx] for idx in 
-        #        np.random.choice(self._get_idx(pool), 
-        #                         size=size, replace=False)]
-         
+        return list(map(lambda idx: idxmapper[idx], 
+                        np.random.choice(self.get_idx(pool), 
+                                         size=size, replace=False)))
             
-    def _get_idx(self, item):
+    def get_idx(self, item):
         return [idx for idx, *_ in item]

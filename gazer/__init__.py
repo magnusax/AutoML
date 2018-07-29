@@ -3,7 +3,7 @@ import warnings
 # Set version and author/email by hand
 __version__ = '0.0.1'
 __author__ = "Magnus Axelsson"
-__email__ = "johanmagnusaxelsson <at> gmail <dot> com"
+__email__ = "johanmagnusaxelsson<at>gmail<dot>com"
 
 
 # Find external packages
