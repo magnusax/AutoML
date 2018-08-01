@@ -1,7 +1,7 @@
 from __future__ import print_function
 
 import os, sys, time, copy, glob, random, warnings
-
+from operator import itemgetter
 import numpy as np
 from sklearn.externals import joblib 
 from tqdm import tqdm_notebook as tqdm
@@ -368,7 +368,8 @@ class GazerMetaEnsembler(object):
         return (clf, sorted(models, key=lambda x: x[1]))
    
 
-    def hillclimb(self, X, y, n_best=0.1, p=0.3, iterations=10, scoring='accuracy', n_jobs=1, verbose=0):
+    def hillclimb(self, X, y, n_best=0.1, p=0.3, iterations=10, scoring='accuracy', 
+                  greater_is_better=True, n_jobs=1, verbose=0):
         """
         Perform hillclimbing on the validation data
         
@@ -390,8 +391,12 @@ class GazerMetaEnsembler(object):
                 Due to the stochastic nature of the ensemble selection
                 we try 'iterations' times to find the best one
                 
-            scoring : str, default: accuracy
+            scoring : str, default: 'accuracy'
                 The metric to use when hillclimbing
+            
+            greater_is_better : boolean, default: True
+                If True then a higher score on the validation
+                set is better.
             
             n_jobs : int, default: 1
                 Parallel processing of files.
@@ -422,23 +427,22 @@ class GazerMetaEnsembler(object):
             time.sleep(1)
             external = parallel(joblib.delayed(_keras_score_fitted)(path, X, y, scorer) 
                                 for path in nets) if nets else []
-        pooled = [clf for clf in sklearn + external if not clf is None]                  
+        pooled = sorted([clf for clf in sklearn+external if not clf is None], 
+                        key=itemgetter(2))                 
         del sklearn
         del external        
         
         if verbose > 0:        
-            max_score = np.round(max([score for *_, score in pooled]), decimals=4)
-            print("Single model max validation score = {}".format(max_score)) 
+            max_score = max(pooled, key=itemgetter(2))
+            print("Single model max validation score = {}".format(np.round(max_score, 4))) 
         
-        pooled = [(str(idx), clf, y_pred) for idx, (clf, y_pred, _) 
-                  in enumerate(sorted(pooled, key=lambda x: -x[2]))]                            
+        pooled = [(str(idx), clf, preds) for idx, (clf, preds, _) in enumerate(pooled)]
         ensemble = pooled[:grab]        
-        weights = {idx: 0.0 for idx, *_ in pooled}    
-        for idx, *_ in ensemble:
-            weights[idx] = 1.0
+        weights = {idx: 0. for idx, *_ in pooled}    
+        for idx, *_ in ensemble: weights[idx] = 1.
         
         if verbose > 0: 
-            print("Best model was: {}".format(ensemble[0][1]))                         
+            print("Best model: {}".format(ensemble[0][1]))                         
     
         all_ensembles = []
         for _ in range(iterations):
@@ -463,16 +467,16 @@ class GazerMetaEnsembler(object):
         max_iter = 100
         val_scores = []
         best_score = float("-Inf")
-        if seed is not None:
-            np.random.seed(seed)
-            
+        if seed is not None: np.random.seed(seed)
+        scargs = {'greater_is_better': greater_is_better}
+                
         hc_weights = weights.copy()
         hc_ensemble = ensemble.copy()
         hc_pool = self.sample_algorithms(p, pooled)
 
         curr_score = self.score(hc_ensemble, hc_weights, y, scorer)      
         if verbose > 0:
-            print("Initial ensemble score = {:.5f}".format(curr_score))
+            print("Initial ensemble score = {:.4f}".format(curr_score))
                   
         for i in range(1, max_iter):                                    
             for algorithm in hc_pool:                
@@ -483,15 +487,15 @@ class GazerMetaEnsembler(object):
                 local_weights[idx] += 1
                 
                 this_score = self.score(local_ensemble, local_weights, y, scorer)            
-                if this_score > best_score:
+                if rank_scores(this_score, best_score, strict=True, **scargs)
                     best_idx = idx
                     best_score = this_score
                     best_algorithm = [algorithm]
             
-            if best_score <= curr_score:
-                print("Could not improve. Updated score was: {:.5f}".format(best_score))
+            if rank_scores(best_score, curr_score, strict=False, **scargs)
+                print("Could not improve. Updated score was: {:.4f}".format(best_score))
                 break                        
-            elif best_score > curr_score: 
+            elif rank_scores(best_score, curr_score, strict=True, **scargs)
                 curr_score = best_score
                 hc_weights[best_idx] += 1                
                 if not best_idx in self.get_idx(hc_ensemble):
@@ -499,11 +503,27 @@ class GazerMetaEnsembler(object):
             
             val_scores.append((i, curr_score))
             if verbose > 0:
-                print("Ensemble loop iter: {} \tScore: {:.5f}".format(*val_scores[-1]))
+                print("Loop iter: {} \tScore: {:.4f}".format(*val_scores[-1]))
             
         weighted_ensemble = [(path, hc_weights[idx]) for idx, path, _ in hc_ensemble]        
         weighted_ensemble.append(val_scores[-1][-1])
         return weighted_ensemble
+        
+    
+    @staticmethod
+    def rank_scores(this_score, score_to_compare_to, greater_is_better, strict):
+        """ Method to facilitate comparison of scores.
+        """
+        if strict_comparison:
+            if greater_is_better:
+                return (this_score > score_to_compare_to)
+            else:
+                return (this_score < score_to_compare_to)
+        else:
+             if greater_is_better:
+                return (this_score <= score_to_compare_to)
+            else:
+                return (this_score >= score_to_compare_to)
         
         
     def score(self, ensemble, weights, y, scorer):
