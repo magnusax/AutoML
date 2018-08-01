@@ -5,7 +5,7 @@ import os, sys, time, copy, glob, random, warnings
 import numpy as np
 from scipy.stats import uniform
 from sklearn.externals import joblib 
-from tqdm import tqdm_notebook
+from tqdm import tqdm_notebook as tqdm
 
 from .metrics import get_scorer
 from .sampling import Loguniform
@@ -294,7 +294,7 @@ class GazerMetaEnsembler(object):
                         for i, estimator in enumerate(estimators, start=1))
                 else:
                     models = []
-                    for i, estimator in enumerate(tqdm_notebook(estimators, desc="{}".format(name), ncols=120)):
+                    for i, estimator in enumerate(tqdm(estimators, desc="{}".format(name), ncols=120)):
                         this_modelfile, this_score = single_fit(estimator, scorer, X, y, path, i, **kwargs_)
                         models.append((this_modelfile, this_score))
                     
