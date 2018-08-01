@@ -234,14 +234,18 @@ class GazerMetaLearner():
     def _add_algorithm(self, module_name, algorithm_name):                     
         """ Import classifier algorithms """
                     
-        path_to_module = ".".join((__package__, "classifiers", module_name))                           
+        path_to_module = ".".join((__package__, "classifiers", module_name))
+        print('path', path_to_module)
         try:
             module = import_module(path_to_module, package=True)
-        except ImportError: 
-            warnings.warn("Could not import {}\n{}"
-                          .format(module_name, sys.exc_info()[1]), 
-                          RuntimeWarning)
-            return None
+        except ImportError:
+            try:
+                module = import_module(path_to_module, package=False)
+            except:
+                warnings.warn("Could not import {}\n{}"
+                              .format(module_name, sys.exc_info()[1]), 
+                               RuntimeWarning)
+                return None
         
         algorithm = getattr(module, algorithm_name)        
         

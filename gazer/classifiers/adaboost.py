@@ -3,7 +3,7 @@ from sklearn.ensemble import AdaBoostClassifier
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.linear_model import LogisticRegression
 
-from ..base import EnsembleBaseClassifier, EnsembleBaseRegressor
+from ..base import EnsembleBaseClassifier
 from ..utils.stats import _uniform
 
   
@@ -73,8 +73,7 @@ class MetaAdaBoostClassifier(EnsembleBaseClassifier):
         Consider including more base estimators later.
         
         """
-        _base_estimator = self.init_params['base_estimator']
-        
+        _base_estimator = self.init_params['base_estimator']       
         ada = {'n_estimators': randint(10, 1000),
                'learning_rate': _uniform(0.01, 0.1)}  
         
