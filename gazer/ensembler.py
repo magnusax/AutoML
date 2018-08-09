@@ -467,8 +467,9 @@ class GazerMetaEnsembler(object):
         """ 
         max_iter = 100
         val_scores = []
-        best_score = float("-Inf")
-        if seed is not None: np.random.seed(seed)
+        best_score = float("-Inf") if greater_is_better else float("Inf")
+        if seed is not None: 
+            np.random.seed(seed)
         scargs = {'greater_is_better': greater_is_better}
                 
         hc_weights = weights.copy()
@@ -488,15 +489,15 @@ class GazerMetaEnsembler(object):
                 local_weights[idx] += 1
                 
                 this_score = self.score(local_ensemble, local_weights, y, scorer)            
-                if rank_scores(this_score, best_score, strict=True, **scargs)
+                if rank_scores(this_score, best_score, **scargs)
                     best_idx = idx
                     best_score = this_score
                     best_algorithm = [algorithm]
             
-            if rank_scores(best_score, curr_score, strict=False, **scargs)
-                print("Could not improve. Updated score was: {:.4f}".format(best_score))
+            if rank_scores(curr_score, best_score, strict=False, **scargs)
+                print("Failed to improve. Updated score was: {:.4f}".format(best_score))
                 break                        
-            elif rank_scores(best_score, curr_score, strict=True, **scargs)
+            elif rank_scores(best_score, curr_score, **scargs)
                 curr_score = best_score
                 hc_weights[best_idx] += 1                
                 if not best_idx in self.get_idx(hc_ensemble):
@@ -512,19 +513,12 @@ class GazerMetaEnsembler(object):
         
     
     @staticmethod
-    def rank_scores(this_score, score_to_compare_to, greater_is_better, strict):
-        """ Method to facilitate comparison of scores.
-        """
-        if strict_comparison:
-            if greater_is_better:
-                return (this_score > score_to_compare_to)
-            else:
-                return (this_score < score_to_compare_to)
-        else:
-             if greater_is_better:
-                return (this_score <= score_to_compare_to)
-            else:
-                return (this_score >= score_to_compare_to)
+    def rank_scores(score, score_to_compare, greater_is_better, strict=True):
+    if strict:
+        op = operator.gt if greater_is_better else operator.lt
+    else:
+        op = operator.ge if greater_is_better else operator.le
+    return op(score, score_to_compare)
         
         
     def score(self, ensemble, weights, y, scorer):
@@ -553,6 +547,8 @@ class GazerMetaEnsembler(object):
     
     
     def sample_algorithms(self, p, pool):        
+        """ Sample algorithms from repository
+        """
         idxmapper = {idx: (idx, clf, pr) for idx, clf, pr in pool}               
         if isinstance(p, float):
             size = int(p * float(len(pool)))
